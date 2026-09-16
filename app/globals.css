@@ -1,0 +1,308 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #ece7dc;
+  --paper-bright: #f6f1e6;
+  --ink: #2b2721;
+  --ink-soft: rgba(43, 39, 33, 0.58);
+  --ink-faint: rgba(43, 39, 33, 0.36);
+  --hairline: rgba(43, 39, 33, 0.14);
+  --earth: #9a6a3e;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(43, 39, 33, 0.85);
+  color: var(--paper);
+}
+
+/* ---------- painted ground ---------- */
+.wash {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 252, 244, 0.9) 0%, rgba(255, 252, 244, 0) 55%),
+    radial-gradient(60% 40% at 12% 88%, rgba(154, 106, 62, 0.14) 0%, rgba(154, 106, 62, 0) 70%),
+    radial-gradient(60% 40% at 88% 82%, rgba(93, 122, 107, 0.14) 0%, rgba(93, 122, 107, 0) 70%),
+    linear-gradient(180deg, #efe9db 0%, var(--paper) 60%, #e6ddcb 100%);
+}
+.wash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.17 0 0 0 0 0.15 0 0 0 0 0.12 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+
+/* ---------- book core (ported geometry CSS) ---------- */
+.sb-book {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1760 / 1240;
+  transform-style: preserve-3d;
+  z-index: 1;
+}
+.sb-3d {
+  position: relative;
+  flex: 1 1;
+  min-width: 0;
+  max-width: 900px;
+  perspective: 1750px;
+  perspective-origin: 50% 46%;
+}
+.sb-tilt {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(var(--zoom, 1));
+  will-change: transform;
+}
+.sb-cast {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+.sb-cast.ambient {
+  left: 5%;
+  right: 5%;
+  top: 27%;
+  bottom: 2%;
+  background: radial-gradient(50% 50% at 50% 58%, rgba(58, 44, 26, 0.34) 0%, rgba(58, 44, 26, 0.19) 40%, rgba(58, 44, 26, 0) 74%);
+  filter: blur(26px);
+  opacity: calc(1 - var(--shade, 0) * 0.42);
+}
+.sb-cast.contact {
+  left: 9%;
+  right: 9%;
+  top: 62%;
+  bottom: 10%;
+  background: radial-gradient(50% 44% at 50% 42%, rgba(44, 32, 14, 0.4) 0%, rgba(44, 32, 14, 0.17) 48%, rgba(44, 32, 14, 0) 78%);
+  filter: blur(11px);
+  opacity: calc(1 - var(--shade, 0) * 0.5);
+}
+.sb-cast.hair {
+  left: 12%;
+  right: 12%;
+  top: 70%;
+  bottom: 17%;
+  background: radial-gradient(50% 52% at 50% 40%, rgba(40, 28, 10, 0.34) 0%, rgba(40, 28, 10, 0) 76%);
+  filter: blur(4px);
+  opacity: calc(1 - var(--shade, 0) * 0.62);
+}
+
+.gutter-shade {
+  position: absolute;
+  top: 4%;
+  bottom: 4%;
+  width: 46%;
+  pointer-events: none;
+  opacity: calc(var(--shade, 0) * 0.62);
+}
+.gutter-shade.left {
+  right: 0;
+  background: linear-gradient(270deg, rgba(52, 38, 20, 0.3), rgba(52, 38, 20, 0) 82%);
+}
+.gutter-shade.right {
+  left: 0;
+  background: linear-gradient(90deg, rgba(52, 38, 20, 0.24), rgba(52, 38, 20, 0) 82%);
+}
+
+/* turning leaf */
+.curl {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: calc(var(--bw, 800px) * var(--span));
+  transform-style: preserve-3d;
+  z-index: 6;
+}
+.curl.next {
+  left: 50%;
+  transform-origin: left center;
+  transform: rotateY(calc(-1 * var(--tt, 0deg)));
+}
+.curl.prev {
+  right: 50%;
+  transform-origin: right center;
+  transform: rotateY(var(--tt, 0deg));
+}
+.strip {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: calc(var(--bw, 800px) * var(--span) / var(--n));
+  transform-style: preserve-3d;
+}
+.curl.next .strip { transform-origin: left center; }
+.curl.prev .strip { transform-origin: right center; }
+.curl.next > .strip { left: 0; }
+.curl.prev > .strip { right: 0; left: auto; }
+.curl.next .strip .strip { left: 100%; transform: rotateY(var(--td, 0deg)); }
+.curl.prev .strip .strip { right: 100%; transform: rotateY(calc(-1 * var(--td, 0deg))); }
+
+.face {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: -1.1px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+.face.back { transform: rotateY(180deg); }
+.face .sh, .face .gl { position: absolute; left: 0; right: 0; top: 4%; bottom: 4%; pointer-events: none; }
+.curl.next .face.front .sh, .curl.prev .face.back .sh {
+  background: linear-gradient(90deg, rgba(58, 43, 20, var(--a1, 0)), rgba(58, 43, 20, var(--a2, 0)));
+}
+.curl.next .face.back .sh, .curl.prev .face.front .sh {
+  background: linear-gradient(90deg, rgba(58, 43, 20, var(--a2, 0)), rgba(58, 43, 20, var(--a1, 0)));
+}
+.face .gl {
+  background: #fffaf0;
+  opacity: calc(var(--shade, 0) * var(--lit, 1) * var(--lit, 1) * 0.2);
+}
+
+/* loupe */
+.loupe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--lr, 270px);
+  height: var(--lr, 270px);
+  pointer-events: none;
+  z-index: 80;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  will-change: transform;
+}
+.loupe.on { opacity: 1; }
+.loupe .ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: grab;
+  padding: calc(var(--lr, 270px) * 0.058);
+  box-shadow: 0 1px 2px rgba(58, 44, 26, 0.3), 0 10px 18px rgba(58, 44, 26, 0.24), 0 26px 40px rgba(58, 44, 26, 0.2), 0 48px 66px rgba(58, 44, 26, 0.13);
+}
+.loupe.held .ring { cursor: grabbing; }
+.loupe .ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: linear-gradient(146deg, #fdf7e9 0%, #e6d7b4 14%, #b69d70 32%, #7d6740 50%, #cdbb92 66%, #f4ead3 80%, #9b8459 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), inset 0 -2px 3px rgba(70, 52, 26, 0.5);
+  -webkit-mask-image: radial-gradient(circle closest-side at 50% 50%, transparent 0 88.2%, #000 89.8% 100%);
+  mask-image: radial-gradient(circle closest-side at 50% 50%, transparent 0 88.2%, #000 89.8% 100%);
+}
+.loupe .grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--lr, 270px) * 0.74);
+  height: calc(var(--lr, 270px) * 0.125);
+  transform-origin: 0 50%;
+  transform: rotate(40deg) translate(calc(var(--lr, 270px) * 0.33), -50%);
+  border-radius: calc(var(--lr, 270px) * 0.06);
+  pointer-events: auto;
+  cursor: grab;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.46) 0 13%, rgba(255, 255, 255, 0) 44%, rgba(0, 0, 0, 0.26) 100%),
+    linear-gradient(90deg, #d9bd82 0 14%, #a9884e 14% 20%, #6d4c2b 20% 62%, #5a3d22 62% 92%, #7a563180 92% 100%);
+  box-shadow: 0 8px 15px rgba(58, 44, 26, 0.26), 0 18px 26px rgba(58, 44, 26, 0.14);
+}
+.lens {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(52, 40, 22, 0.55), inset 0 4px 12px rgba(40, 30, 14, 0.28), inset 0 -7px 16px rgba(255, 250, 240, 0.14);
+}
+.zoomwrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+}
+.zoominner { position: absolute; inset: 0; transform-origin: 0 0; }
+.lens::before, .lens::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; }
+.lens::before {
+  z-index: 1;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 54%, rgba(58, 44, 26, 0.1) 76%, rgba(46, 34, 16, 0.34) 100%);
+  box-shadow: inset 0 0 0 2px rgba(130, 162, 196, 0.26), inset 0 0 0 4px rgba(206, 158, 112, 0.15);
+}
+.lens::after {
+  z-index: 2;
+  background:
+    radial-gradient(36% 26% at 29% 19%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 76%),
+    radial-gradient(24% 16% at 74% 86%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 80%),
+    linear-gradient(150deg, rgba(255, 255, 255, 0.06) 0 18%, rgba(255, 255, 255, 0) 42%);
+}
+
+.sb-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  z-index: 60;
+  -webkit-tap-highlight-color: transparent;
+}
+.sb-zone:active { cursor: grabbing; }
+.sb-prev { left: 0; width: 50%; }
+.sb-next { right: 0; width: 50%; }
+
+.sb-caption {
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* opening riffle: directional motion blur while leaves fly (cf. original .sb-wrap.intro) */
+.intro .sb-book {
+  filter: url(#sb-mblur-1);
+}
+.intro.b2 .sb-book {
+  filter: url(#sb-mblur-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro .sb-book,
+  .intro.b2 .sb-book {
+    filter: none;
+  }
+}
+@media (pointer: coarse) {
+  .loupe { display: none; }
+}
+
+.paper-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.26 0 0 0 0 0.2 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23p)'/%3E%3C/svg%3E");
+}
