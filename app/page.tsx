@@ -2,6 +2,7 @@
 
 import { PLATES } from "@/content/plates";
 import { Sketchbook } from "@/components/Sketchbook";
+import { ContactForm } from "@/components/ContactForm";
 import { Botany, Rule, SectionLabel, TopBar } from "@/components/SiteChrome";
 
 export default function Page() {
@@ -93,27 +94,35 @@ export default function Page() {
 
         <section id="contact" className="mx-auto max-w-[1080px] scroll-mt-28 px-[clamp(20px,5vw,48px)]">
           <SectionLabel>Contact</SectionLabel>
-          <p className="m-0 max-w-[56ch] text-[clamp(17px,1.7vw,20px)] leading-[1.74] font-light">
-            Write at{" "}
-            <a
-              href="mailto:bvmanoj61@gmail.com"
-              className="text-[#2b2721] underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 transition-colors hover:decoration-[#2b2721]"
-            >
-              bvmanoj61@gmail.com
-            </a>
-            . I read everything, and I answer most of it.
-          </p>
-          <p className="mt-5 mb-0 flex flex-wrap gap-[22px] text-[12px] tracking-[0.24em] uppercase">
-            <a className="underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 hover:decoration-[#2b2721]" href="https://github.com/Venkata-Manoj" target="_blank" rel="me noopener">
-              GitHub
-            </a>
-            <a className="underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 hover:decoration-[#2b2721]" href="https://linkedin.com/in/venkata-manoj" target="_blank" rel="me noopener">
-              LinkedIn
-            </a>
-            <a className="underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 hover:decoration-[#2b2721]" href="mailto:bvmanoj61@gmail.com">
-              Email
-            </a>
-          </p>
+          <div className="grid grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] items-start gap-[clamp(24px,4vw,48px)] max-md:grid-cols-1">
+            <ContactForm />
+            <div>
+              <p className="m-0 max-w-[56ch] text-[clamp(17px,1.7vw,20px)] leading-[1.74] font-light">
+                Write at{" "}
+                <a
+                  href="mailto:bvmanoj61@gmail.com"
+                  className="text-[#2b2721] underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 transition-colors hover:decoration-[#2b2721]"
+                >
+                  bvmanoj61@gmail.com
+                </a>
+                . I read everything, and I answer most of it.
+              </p>
+              <p className="mt-5 mb-0 flex flex-wrap gap-[22px] text-[12px] tracking-[0.24em] uppercase">
+                <a className="underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 hover:decoration-[#2b2721]" href="https://github.com/Venkata-Manoj" target="_blank" rel="me noopener">
+                  GitHub
+                </a>
+                <a className="underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 hover:decoration-[#2b2721]" href="https://linkedin.com/in/venkata-manoj" target="_blank" rel="me noopener">
+                  LinkedIn
+                </a>
+                <a className="underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 hover:decoration-[#2b2721]" href="mailto:bvmanoj61@gmail.com">
+                  Email
+                </a>
+              </p>
+              <p className="mt-5 mb-0 text-[12px] leading-[1.8] tracking-[0.24em] text-[rgba(43,39,33,0.5)] uppercase">
+                Replies within a day · India · Open to AI/ML internships
+              </p>
+            </div>
+          </div>
         </section>
 
         <p className="mt-[clamp(48px,7vh,84px)] pb-11 text-center text-[11.5px] tracking-[0.24em] text-[rgba(43,39,33,0.36)] uppercase">

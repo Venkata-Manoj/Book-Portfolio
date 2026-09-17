@@ -191,6 +191,33 @@ export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
         <p className="relative text-[clamp(9px,1.6vw,15px)] italic" style={{ fontFamily: "var(--font-display), Georgia, serif", color: plate.accent }}>
           {plate.title}
         </p>
+        {plate.repo && (
+          <p className="relative z-[61] mt-[2%] text-[11px] tracking-[0.18em] text-[rgba(43,39,33,0.5)] uppercase">
+            <a
+              href={`https://${plate.repo}`}
+              target="_blank"
+              rel="noopener"
+              onPointerDown={(e) => e.stopPropagation()}
+              className="pointer-events-auto hover:underline"
+            >
+              {plate.repo}
+            </a>
+            {plate.live && (
+              <>
+                {" · "}
+                <a
+                  href={`https://${plate.live}`}
+                  target="_blank"
+                  rel="noopener"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="pointer-events-auto hover:underline"
+                >
+                  Live ↗
+                </a>
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       {/* page edge highlight */}

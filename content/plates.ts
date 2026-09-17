@@ -64,6 +64,10 @@ export interface Plate {
   link?: PlateLink;
   /** extra outbound links rendered beside `link` */
   links?: PlateLink[];
+  /** bare repo path, e.g. "github.com/Venkata-Manoj/WhatIF" */
+  repo?: string;
+  /** bare live host/path, e.g. "what-if-henna.vercel.app" */
+  live?: string;
   /** folio number, computed at render */
   folio?: string;
 }
@@ -131,8 +135,8 @@ export const PLATES: Plate[] = [
     place: "Chapter 01",
     kicker: "Hello — start here",
     headline: "I ship AI that survives contact with users",
-    sub: "B.Tech AI & Data Science · GPA 9.2/10",
-    body: "AI, Machine Learning & Data Science undergraduate building production-grade Generative AI and LLM applications, RAG systems and RL environments. Five deployed projects spanning multi-LLM orchestration, video AI tooling, component risk analysis and autonomous news intelligence.",
+    sub: "AI Engineer · Data Scientist · Full-Stack Developer",
+    body: "B V Manoj — an AI & Data Science engineering student at SIMATS, class of 2028. I build intelligent systems: RAG pipelines and multi-LLM agent workflows on one end, full-stack applications deployed at scale on the other. Open to AI/ML internships and research collaborations.",
     accent: "#5d7a6b",
     motif: "arches",
   },
@@ -142,7 +146,7 @@ export const PLATES: Plate[] = [
     kicker: "How I work",
     headline: "Python to prod, TypeScript to ship",
     sub: "PyTorch · RAG · Next.js · FastAPI",
-    body: "Python, TypeScript, SQL. PyTorch, HuggingFace, multi-LLM fallback chains, RAG over FAISS and LangChain. FastAPI backends, Next.js front-ends, Docker and CI/CD on AWS, Cloud Run and Vercel.",
+    body: "Languages — Python, TypeScript, SQL, C++. AI/ML — PyTorch, TensorFlow, HuggingFace, RAG over FAISS and LangChain, OpenCV. Systems — FastAPI, Next.js, Docker and CI/CD on AWS, Cloud Run and Vercel.",
     accent: "#7a6a9a",
     motif: "grid",
   },
@@ -155,6 +159,7 @@ export const PLATES: Plate[] = [
     body: "A tool that deconstructs videos into production-ready prompts for video AI models. Frame-extraction pipeline in OpenCV, scene detection with keyframe selection lifting output relevance 45%, and a batch CLI clearing 100+ videos a session.",
     accent: "#b0563a",
     motif: "waves",
+    repo: "github.com/Venkata-Manoj/videoreverse",
   },
   {
     title: "AI-News-Bot",
@@ -165,6 +170,7 @@ export const PLATES: Plate[] = [
     body: "Autonomous news intelligence scraping 6 sources and delivering Telegram cards every 45 minutes. A 6-LLM fallback chain across OpenAI, Anthropic and Ollama holds 99.2% uptime; dedup cuts noise 60% across 500+ articles a day for 200+ subscribers.",
     accent: "#3a7a8c",
     motif: "peaks",
+    repo: "github.com/Venkata-Manoj/AI-News-Bot",
   },
   {
     title: "WhatIF",
@@ -175,6 +181,8 @@ export const PLATES: Plate[] = [
     body: "AI-powered UI component analyzer for React, Vue and HTML with exportable PDF reports. A Genkit engine flags accessibility, performance and security risks; Firebase sessions scaled to 500+ analyses in the first month, cutting manual review effort 80%.",
     accent: "#4e7a6b",
     motif: "bloom",
+    repo: "github.com/Venkata-Manoj/WhatIF",
+    live: "what-if-henna.vercel.app",
   },
   {
     title: "Capstone-Forage",
@@ -185,6 +193,7 @@ export const PLATES: Plate[] = [
     body: "RAG-powered report generator ingesting PDFs, DOCX and images into institution-compliant capstone reports. A FAISS store over 10k+ chunks retrieves at 92%; local Ollama inference cuts cloud cost 100% and every report passes compliance checks.",
     accent: "#8c6a3a",
     motif: "orbit",
+    repo: "github.com/Venkata-Manoj/Capstone-Forage",
   },
   {
     title: "Journey",
@@ -192,7 +201,7 @@ export const PLATES: Plate[] = [
     kicker: "Where I've been",
     headline: "Discipline by day, hackathons by night",
     sub: "B.Tech SIMATS 9.2 · HSC 95.6% · SSC 85%",
-    body: "Saveetha School of Engineering (2024–present), SR Junior College, Z.P. High School. 1st prize at Vel Tech Hackathon 2024, national finalist at Smart India Hackathon 2025 (Top 50 of 15,000+), core member of the SIMATS Hackathon Club running 5+ events for 200+ builders.",
+    body: "B.Tech at Saveetha School of Engineering, 2024–2028; SR Junior College, Vijayawada before that. 1st prize at Vel Tech Hackathon 2024 for an AI healthcare solution; national finalist at Smart India Hackathon 2025 (Top 50 of 15,000+); core member of the SIMATS Hackathon Club. Sealed with DataCamp LLM, RAG and multi-step-chain certifications plus Anthropic prompt engineering.",
     accent: "#9a6a3e",
     motif: "sun",
   },
@@ -202,9 +211,19 @@ export const PLATES: Plate[] = [
     kicker: "Write to me",
     headline: "Let's build something that ships",
     sub: "bvmanoj61@gmail.com — replies within a day",
-    body: "Tap any plate in the index below to jump straight to it. Best viewed with a cursor (the loupe needs one), but fully usable by touch and keyboard. Fluent in English, native in Telugu, conversational in Hindi.",
+    body: "Tap any plate below to jump straight to it. bvmanoj61@gmail.com · GitHub Venkata-Manoj · LinkedIn venkata-manoj. Fluent in English, native in Telugu, conversational in Hindi & Tamil.",
     accent: "#2b2721",
     motif: "arches",
+  },
+  {
+    title: "Field notes",
+    place: "Appendix",
+    kicker: "More from the bench",
+    headline: "Small builds, sharp lessons",
+    sub: "RL · Vision · Shipped tools",
+    body: "Resilience-Ops-Env — a Gym-style RL world where agents triage simulated infra incidents. Sign-Language-TTS — realtime sign recognition with LSTM, MediaPipe and speech output. IdeaForge_2k26 — live e-certificate issuance and verification, glassmorphism UI included.",
+    accent: "#4e6b5d",
+    motif: "orbit",
   },
 ];
 
