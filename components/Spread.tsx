@@ -8,6 +8,132 @@ import { Motif } from "./Motif";
  * Left page = field notes, right page = plate.
  * Designed to be legible at 900px and still hold up at 2.3x loupe zoom.
  */
+const FRAME =
+  "rounded-[3px] border border-[rgba(43,39,33,0.2)] object-cover p-[3px] shadow-[0_6px_16px_rgba(58,44,26,0.25)]";
+const CAPTION = "mt-[3%] text-[clamp(8px,1.3vw,12px)] italic";
+const CAPTION_STYLE_EXTRA = { fontFamily: "var(--font-display), Georgia, serif" };
+
+/**
+ * Left-page media, in priority order: contact sheet → single image → generative
+ * motif. A gallery is a 62%-wide hero plus 28%-wide tiles (default 1:1) beside
+ * it, so 2–4 shots read as a scrapbook page instead of a slideshow.
+ */
+function PlateMedia({ plate }: { plate: Plate }) {
+  if (plate.images?.length) {
+    return (
+      <div className="mt-[5%] flex flex-wrap items-start gap-x-[4%] gap-y-[3%]">
+        {plate.images.map((im, i) => (
+          <figure key={im.src} className={`m-0 ${i === 0 ? "w-[62%]" : "w-[28%]"}`}>
+            <img
+              src={im.src}
+              alt={im.alt ?? im.caption ?? plate.title}
+              draggable={false}
+              className={`w-full ${i === 0 ? "rotate-[-1.5deg]" : "rotate-[1.2deg]"} ${FRAME}`}
+              style={{
+                background: "#fbf8f0",
+                aspectRatio: im.aspect ?? (i === 0 ? "4/5" : "1/1"),
+              }}
+            />
+            {im.caption && (
+              <figcaption className={CAPTION} style={{ ...CAPTION_STYLE_EXTRA, color: plate.accent }}>
+                {im.caption}
+              </figcaption>
+            )}
+          </figure>
+        ))}
+      </div>
+    );
+  }
+
+  if (plate.image) {
+    return (
+      <figure className="m-0 mt-[5%]">
+        <img
+          src={plate.image}
+          alt={plate.imageAlt ?? plate.imageCaption ?? plate.title}
+          draggable={false}
+          className={`aspect-[4/5] w-[62%] rotate-[-1.5deg] ${FRAME}`}
+          style={{ background: "#fbf8f0" }}
+        />
+        {plate.imageCaption && (
+          <figcaption className={CAPTION} style={{ ...CAPTION_STYLE_EXTRA, color: plate.accent }}>
+            {plate.imageCaption}
+          </figcaption>
+        )}
+      </figure>
+    );
+  }
+
+  return (
+    <div className="mt-[6%] opacity-80">
+      <Motif motif={plate.motif} accent={plate.accent} />
+    </div>
+  );
+}
+
+/** Small-caps chips for the tools/languages used on this plate. */
+function PlateStack({ plate }: { plate: Plate }) {
+  if (!plate.stack?.length) return null;
+  return (
+    <ul className="m-0 mt-[4%] flex list-none flex-wrap gap-x-[3%] gap-y-[0.6em] p-0 text-[clamp(7px,1.05vw,10px)] tracking-[0.16em] text-[rgba(43,39,33,0.5)] uppercase">
+      {plate.stack.map((s) => (
+        <li key={s} className="rounded-full border border-[rgba(43,39,33,0.14)] px-[3.2%] py-[0.35em]">
+          {s}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Two-column metric table (dl > div > dt/dd is valid HTML5). */
+function PlateMetrics({ plate }: { plate: Plate }) {
+  if (!plate.metrics?.length) return null;
+  return (
+    <dl className="m-0 mb-[1em] grid grid-cols-2 gap-x-[6%] text-[clamp(7px,1.05vw,10px)] tracking-[0.14em] uppercase">
+      {plate.metrics.map((m) => (
+        <div
+          key={m.label}
+          className="flex items-baseline justify-between gap-[0.5em] border-b border-[rgba(43,39,33,0.12)] py-[0.3em]"
+        >
+          <dt className="m-0 text-[rgba(43,39,33,0.5)]">{m.label}</dt>
+          <dd className="m-0" style={{ color: plate.accent }}>
+            {m.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Outbound links. They sit at z-[61] — above the `.sb-zone` drag buttons (z-60)
+ * — and stop pointerdown so tapping one never starts a page turn, the same
+ * pattern the nav arrows and the loupe grip use. Copies inside the aria-hidden
+ * mirrors (turn halves, loupe copy) are neutralised by the `.plate-link` rule
+ * in globals.css.
+ */
+function PlateLinks({ plate }: { plate: Plate }) {
+  const links = [...(plate.link ? [plate.link] : []), ...(plate.links ?? [])];
+  if (!links.length) return null;
+  return (
+    <p className="relative z-[61] mt-[0.8em] mb-0 flex flex-wrap gap-x-[6%] gap-y-[0.4em] text-[clamp(7px,1.1vw,10.5px)] tracking-[0.18em] uppercase">
+      {links.map((l) => (
+        <a
+          key={`${l.label}-${l.href}`}
+          href={l.href}
+          target="_blank"
+          rel="me noopener"
+          onPointerDown={(e) => e.stopPropagation()}
+          className="plate-link pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 transition-colors hover:decoration-[#2b2721]"
+          style={{ color: plate.accent }}
+        >
+          {l.label}
+        </a>
+      ))}
+    </p>
+  );
+}
+
 export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
   return (
     <div className="paper-grain relative grid h-full w-full grid-cols-2 overflow-hidden rounded-[10px] bg-[#f6f1e6] shadow-[inset_0_0_60px_rgba(120,90,50,0.12)]">
@@ -21,37 +147,18 @@ export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
           <p className="text-[clamp(7px,1.1vw,10px)] uppercase tracking-[0.24em] text-[rgba(43,39,33,0.5)]">
             {plate.kicker} — {folio}
           </p>
-          {plate.image ? (
-            <figure className="m-0 mt-[5%]">
-              <img
-                src={plate.image}
-                alt={plate.imageCaption ?? plate.title}
-                draggable={false}
-                className="aspect-[4/5] w-[62%] rotate-[-1.5deg] rounded-[3px] border border-[rgba(43,39,33,0.2)] object-cover p-[3px] shadow-[0_6px_16px_rgba(58,44,26,0.25)]"
-                style={{ background: "#fbf8f0" }}
-              />
-              {plate.imageCaption && (
-                <figcaption
-                  className="mt-[3%] text-[clamp(8px,1.3vw,12px)] italic"
-                  style={{ fontFamily: "var(--font-display), Georgia, serif", color: plate.accent }}
-                >
-                  {plate.imageCaption}
-                </figcaption>
-              )}
-            </figure>
-          ) : (
-            <div className="mt-[6%] opacity-80">
-              <Motif motif={plate.motif} accent={plate.accent} />
-            </div>
-          )}
+          <PlateMedia plate={plate} />
+          <PlateStack plate={plate} />
         </div>
         <div>
+          <PlateMetrics plate={plate} />
           <p
             className="max-w-[34ch] text-[clamp(8px,1.35vw,13.5px)] font-light leading-[1.7]"
             style={{ color: "rgba(43,39,33,0.82)" }}
           >
             {plate.body}
           </p>
+          <PlateLinks plate={plate} />
           <p className="mt-[5%] text-[clamp(6px,1vw,9px)] uppercase tracking-[0.2em] text-[rgba(43,39,33,0.36)]">
             Ink · wash · {plate.place}
           </p>

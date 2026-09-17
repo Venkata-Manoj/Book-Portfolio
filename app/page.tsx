@@ -33,18 +33,19 @@ export default function Page() {
 
         <Rule />
 
-        <section id="about" className="mx-auto grid max-w-[1080px] grid-cols-[minmax(0,1fr)_auto] items-start gap-[clamp(24px,5vw,60px)] px-[clamp(20px,5vw,48px)] max-md:grid-cols-1">
+        <section id="about" className="mx-auto grid max-w-[1080px] scroll-mt-28 grid-cols-[minmax(0,1fr)_auto] items-start gap-[clamp(24px,5vw,60px)] px-[clamp(20px,5vw,48px)] max-md:grid-cols-1">
           <div>
             <SectionLabel>About</SectionLabel>
             <p className="m-0 max-w-[56ch] text-[clamp(17px,1.7vw,20px)] leading-[1.74] font-light tracking-[0.005em]">
-              I&apos;m B V Manoj, an AI &amp; Data Science undergraduate (GPA 9.2/10) building
-              production-grade Generative AI and LLM applications — multi-LLM orchestration, RAG
-              systems, video AI tooling and autonomous agents. Five projects deployed, two national
-              hackathon podiums.
+              I&apos;m B V Manoj — an AI &amp; Data Science engineering student at SIMATS, class
+              of 2028. I build intelligent systems: RAG pipelines and multi-LLM agent workflows on
+              one end, full-stack applications deployed at scale on the other.
             </p>
             <p className="m-0 mt-[1.1em] max-w-[56ch] text-[clamp(17px,1.7vw,20px)] leading-[1.74] font-light tracking-[0.005em]">
-              This book is the slower half of that: each spread is a project, kept like a plate in a
-              sketchbook. Drag the pages above, or use the index below to jump straight in.
+              Every project starts from the same philosophy — production-grade quality from day
+              one. This book keeps the proof like plates in a sketchbook: drag the pages above, or
+              jump straight in from the index below. I&apos;m currently open to AI/ML internships
+              and research collaborations.
             </p>
           </div>
           <svg viewBox="0 0 200 200" aria-hidden="true" className="w-[clamp(150px,17vw,260px)] self-center opacity-90 select-none max-md:w-[170px] max-md:justify-self-center">
@@ -61,7 +62,7 @@ export default function Page() {
 
         <Rule short />
 
-        <section id="plates" className="mx-auto max-w-[1080px] px-[clamp(20px,5vw,48px)]">
+        <section id="plates" className="mx-auto max-w-[1080px] scroll-mt-28 px-[clamp(20px,5vw,48px)]">
           <SectionLabel>Plates — tap to open</SectionLabel>
           <ol className="m-0 list-none border-t border-[rgba(43,39,33,0.14)] p-0">
             {PLATES.map((p, i) => (
@@ -90,7 +91,7 @@ export default function Page() {
 
         <Rule short />
 
-        <section id="contact" className="mx-auto max-w-[1080px] px-[clamp(20px,5vw,48px)]">
+        <section id="contact" className="mx-auto max-w-[1080px] scroll-mt-28 px-[clamp(20px,5vw,48px)]">
           <SectionLabel>Contact</SectionLabel>
           <p className="m-0 max-w-[56ch] text-[clamp(17px,1.7vw,20px)] leading-[1.74] font-light">
             Write at{" "}

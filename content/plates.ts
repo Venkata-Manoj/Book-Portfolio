@@ -7,6 +7,30 @@ export type PlateMotif =
   | "peaks"
   | "bloom";
 
+/** One framed image on a spread. `src` is a public/ path, e.g. "/sketchbook/whatif-report.webp". */
+export interface PlateImage {
+  src: string;
+  /** italic caption printed under the frame */
+  caption?: string;
+  /** accessibility text; falls back to caption, then to the plate title */
+  alt?: string;
+  /**
+   * CSS aspect-ratio for the frame. Defaults to "4/5" for the first image
+   * (the hero) and "1/1" for the small tiles beside it.
+   */
+  aspect?: string;
+}
+
+export interface PlateLink {
+  label: string;
+  href: string;
+}
+
+export interface PlateMetric {
+  value: string;
+  label: string;
+}
+
 export interface Plate {
   /** short title shown under the book + in the index */
   title: string;
@@ -18,16 +42,28 @@ export interface Plate {
   headline: string;
   /** supporting line */
   sub: string;
-  /** body paragraph for the left page */
+  /** body paragraph for the left page — keep under ~240 characters */
   body: string;
   /** accent wash colour for this spread */
   accent: string;
-  /** generative line-art motif */
+  /** generative line-art motif (used when the plate has no image) */
   motif: PlateMotif;
-  /** optional portrait/artwork for the left page (public/ path) */
+  /** single left-page image (public/ path) */
   image?: string;
-  /** caption under the image */
+  /** caption under the single image */
   imageCaption?: string;
+  /** alt text for the single image; falls back to imageCaption, then title */
+  imageAlt?: string;
+  /** 2–4 image contact sheet — when present it wins over `image` */
+  images?: PlateImage[];
+  /** small-caps chips printed under the media, e.g. ["PyTorch", "FAISS"] */
+  stack?: string[];
+  /** small metrics table printed above the body copy */
+  metrics?: PlateMetric[];
+  /** primary outbound link (repo, live demo, paper) */
+  link?: PlateLink;
+  /** extra outbound links rendered beside `link` */
+  links?: PlateLink[];
   /** folio number, computed at render */
   folio?: string;
 }
@@ -36,6 +72,46 @@ export interface Plate {
  * Phase-2 content: B V Manoj — AI/ML undergraduate building
  * production-grade GenAI & LLM applications.
  * Source: E:\resume\data\Resume_Manoj.pdf
+ *
+ * ── How to add your own material ─────────────────────────────────────────────
+ * Every spread is one object in PLATES below. Only `title`, `place`, `kicker`,
+ * `headline`, `sub`, `body`, `accent` and `motif` are required; the rest light
+ * up as soon as you provide them:
+ *
+ *   image / imageCaption      one framed photo on the left page
+ *   images[]                  2–4 image contact sheet (wins over `image`)
+ *   stack[]                   small-caps chips, e.g. tech you used
+ *   metrics[]                 small two-column table above the body copy
+ *   link / links[]            outbound links (repo · live demo · paper)
+ *
+ * Assets live in public/. Put your files in public/sketchbook/ (see
+ * public/sketchbook/README.md for the size/format rules) and reference them
+ * with an absolute path. `npm run check:assets` fails the build if a path is
+ * wrong or the file name case doesn't match exactly.
+ *
+ * Example of a fully loaded project plate:
+ *
+ *   {
+ *     title: "videoreverse",
+ *     place: "Video AI · CLI",
+ *     kicker: "Selected work 01",
+ *     headline: "Videos, deconstructed into prompts",
+ *     sub: "OpenCV · −70% prompt-engineering time",
+ *     body: "…≤240 characters so it fits the left page at 900px…",
+ *     accent: "#b0563a",
+ *     motif: "waves",
+ *     images: [
+ *       { src: "/sketchbook/videoreverse-cli.webp", caption: "Batch run", aspect: "16/10" },
+ *       { src: "/sketchbook/videoreverse-frames.webp", caption: "Keyframes" },
+ *       { src: "/sketchbook/videoreverse-scenes.webp", caption: "Scene map" },
+ *     ],
+ *     stack: ["Python", "OpenCV", "CLI"],
+ *     metrics: [
+ *       { value: "100+", label: "videos/run" },
+ *       { value: "+45%", label: "relevance" },
+ *     ],
+ *     link: { label: "GitHub", href: "https://github.com/Venkata-Manoj" },
+ *   }
  */
 export const PLATES: Plate[] = [
   {

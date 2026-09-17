@@ -87,11 +87,55 @@ can also cause this exact error — test in a private window with extensions off
 
 ## Make it yours (Phase 2)
 
-1. Edit `content/plates.ts` — 8 entries, each = one open spread. Change title/place/kicker/headline/sub/body/accent/motif.
-2. Edit `app/page.tsx` About + Contact + social links, `app/layout.tsx` title/OG URL.
-3. Optional: drop real scans into `public/sketchbook/` and render them inside `Spread.tsx`
-   (keep the procedural version as the loupe-safe fallback).
-4. Deploy: push to GitHub → Import in Vercel → Deploy (no config needed).
+### Where the content lives
+
+| File | What to edit |
+|---|---|
+| `content/plates.ts` | all 9 spreads: copy, accent, motif, images, stack, metrics, links (see the field docs + example at the top of the file) |
+| `app/page.tsx` | hero tagline, About paragraphs, Contact block, social links, index list |
+| `app/layout.tsx` | `<title>`, description, OG tags |
+| `public/sketchbook/` | your images — sizing/format rules are in `public/sketchbook/README.md` |
+
+### Plate fields you can fill in
+
+Required: `title`, `place`, `kicker`, `headline`, `sub`, `body`, `accent`, `motif`.
+Optional, all rendered by `components/Spread.tsx`:
+
+| Field | Effect |
+|---|---|
+| `image` + `imageCaption` (+ `imageAlt`) | one framed photo on the left page (4:5, `object-cover`) |
+| `images: PlateImage[]` | 2–4 image contact sheet — hero at 62%, tiles at 28% (default 1:1). Wins over `image` |
+| `stack: string[]` | small-caps chips (tools/languages) |
+| `metrics: {value,label}[]` | two-column metric table above the body copy |
+| `link` / `links[]` | outbound links (repo · live demo · paper), rendered at `z-[61]` so the page-drag zones don't swallow the click |
+
+`PlateImage` fields: `src` (public path), `caption`, `alt`, `aspect` (CSS ratio, e.g. `"16/10"`; defaults to 4:5 for the hero and 1:1 for tiles).
+
+### Content budget (measured at the real 900 px book width)
+
+| Layout | Result |
+|---|---|
+| single image + caption + body | fits |
+| motif-only plate | fits |
+| gallery(3) + chips(3) + metrics(2) + link(1) + body 232 chars | ±1 px — at the limit |
+| gallery(3) + chips(4) + metrics(4) + links(2) + body 232 chars | **+23 px clipped** |
+| gallery(3) + metrics(2) + body 464 chars | **+76 px clipped** |
+
+Rule of thumb: with a 3-image gallery keep `body` ≤ ~200 characters, `stack` ≤ 3, `metrics` ≤ 2, `links` ≤ 1. Give up a row of chips or one metric before you give up body copy.
+
+### Image specs
+
+Long edge **1400–1800 px**, **≤ 250 KB**, `.webp` for photos/screenshots and `.svg` for diagrams/QR (SVG stays sharp under the 3.45× loupe). Frames are `object-cover` — export a single `image` at 4:5 so nothing important is cropped. Exact filename case matters (Vercel/Linux is case-sensitive).
+
+```bash
+npm run check:assets   # every referenced path must exist — run before deploying
+npm run check          # typecheck + asset guard
+```
+
+### Deploy
+
+Push to GitHub → Import in Vercel → Deploy (no env vars, no config needed).
+
 
 ## Structure
 

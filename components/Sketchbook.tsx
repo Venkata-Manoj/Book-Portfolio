@@ -44,6 +44,31 @@ interface Props {
 
 const folio = (i: number) => String(i + 1).padStart(2, "0");
 
+const STORAGE_KEY = "sketchbook:index";
+
+function readSavedIndex(total: number): number | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null || raw.trim() === "") return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n)) return null;
+    if (n < 0 || n >= total) return null;
+    return n;
+  } catch {
+    return null;
+  }
+}
+
+function saveIndex(i: number) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(STORAGE_KEY, String(i));
+  } catch {
+    // ignore (private mode / quota)
+  }
+}
+
 /** Left/right static half — mirrors the original .sb-half 200%-width trick. */
 function Half({ plate, folio: f, side }: { plate: Plate; folio: string; side: "left" | "right" }) {
   return (
@@ -259,6 +284,46 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     return true;
   }
 
+  /* Shared loupe-grab handlers — grip and ring must never drift apart.
+     Single grab ref, single move, single drop. */
+  function onLoupeDown(e: React.PointerEvent) {
+    if (!loupeOnRef.current || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    loupeTarget.current = null;
+    if (loupeXY.current.x !== null && loupeXY.current.y !== null) {
+      loupeGrab.current = {
+        cx: e.clientX,
+        cy: e.clientY,
+        lx0: loupeXY.current.x,
+        ly0: loupeXY.current.y,
+      };
+    }
+    loupeRef.current?.classList.add("held");
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    setHintGone(true);
+  }
+
+  function onLoupeMove(e: React.PointerEvent) {
+    const g = loupeGrab.current;
+    if (!g) return;
+    e.stopPropagation();
+    const { w, h } = bookDims();
+    const R = loupeSize() / 2;
+    loupeXY.current = {
+      x: Math.max(-R * 0.7, Math.min(w + R * 0.7, g.lx0 + (e.clientX - g.cx))),
+      y: Math.max(-R * 0.7, Math.min(h + R * 1.0, g.ly0 + (e.clientY - g.cy))),
+    };
+    placeLoupe();
+  }
+
+  function onLoupeDrop(e: React.PointerEvent) {
+    if (!loupeGrab.current) return;
+    e.stopPropagation();
+    loupeGrab.current = null;
+    loupeRef.current?.classList.remove("held");
+  }
+
   /* ---------------- rAF loop ---------------- */
 
   function viewSpring(): boolean {
@@ -363,6 +428,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       setTurn(null);
       turnRef.current = null;
       onSpreadChange?.(t.to);
+      saveIndex(t.to);
       forceZoomPaint((v) => v + 1);
       return;
     }
@@ -371,6 +437,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       setTurn(null);
       turnRef.current = null;
       onSpreadChange?.(t.to);
+      saveIndex(t.to);
       forceZoomPaint((v) => v + 1);
     }, 170, 26);
     kick();
@@ -427,6 +494,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       }
       setIdx(i);
       onSpreadChange?.(i);
+      saveIndex(i);
       forceZoomPaint((v) => v + 1);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -452,7 +520,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
 
   const tiltTo = useCallback(
     (cx: number, cy: number) => {
-      if (drag.current) return;
+      if (drag.current || loupeGrab.current) return;
       const book = bookRef.current;
       if (!book) return;
       const r = book.getBoundingClientRect();
@@ -509,7 +577,8 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     const params =
       typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
     if (coarse || reduced.current || params?.has("nointro")) {
-      setIdx(landing);
+      // Preserve a restored position; `landing` is only the default when nothing was saved.
+      setIdx(idxRef.current);
       return;
     }
     const steps = M; // one full flick through the book, landing back on cover
@@ -537,8 +606,19 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     setZoomRead("100%");
     setZoomed({ out: false, in: false });
     restLoupe();
+    // resume-on-reload: restore the settled spread (SSR-safe: inside effect only).
+    // `landing` stays the default when nothing valid was saved.
+    const saved = readSavedIndex(M);
+    if (saved !== null) {
+      setIdx(saved);
+      idxRef.current = saved;
+    }
     onSpreadChange?.(idxRef.current);
-    const t = setTimeout(startIntro, 350);
+    const t = setTimeout(() => {
+      // Reopened on a saved spread: settle directly, don't replay the intro riffle.
+      if (saved !== null) return;
+      startIntro();
+    }, 350);
     const onResize = () => {
       layout();
       const { w, h } = bookDims();
@@ -607,6 +687,12 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
 
   const onStageDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    // Second+ click of a multi-click: let onDoubleClick reset zoom instead of turning again.
+    if (e.detail > 1) return;
+    // A loupe grab owns the pointer: never start a page turn from the glass,
+    // even if a loupe pointerdown ever bubbles up to the stage.
+    if (loupeGrab.current) return;
+    if ((e.target as HTMLElement).closest?.(".loupe")) return;
     e.preventDefault();
     const zone = (e.target as HTMLElement).closest(".sb-zone");
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -622,6 +708,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   };
 
   const onStageMove = (e: React.PointerEvent) => {
+    if (loupeGrab.current) return;
     const d = drag.current;
     if (!d) return;
     const dx = e.clientX - d.x0;
@@ -637,6 +724,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   const endStageDrag = () => {
     const d = drag.current;
     drag.current = null;
+    if (loupeGrab.current) return;
     if (!d || !turnRef.current) return;
     if (shouldCommit(turnT.current, d.vel, d.moved)) commit();
     else cancel();
@@ -730,81 +818,17 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
           <div ref={loupeRef} className="loupe" id="loupe">
             <span
               className="grip"
-              onPointerDown={(e) => {
-                if (!loupeOnRef.current || e.button !== 0) return;
-                e.preventDefault();
-                e.stopPropagation();
-                loupeTarget.current = null;
-                loupeXY.current.x !== null &&
-                  loupeXY.current.y !== null &&
-                  (loupeGrab.current = {
-                    cx: e.clientX,
-                    cy: e.clientY,
-                    lx0: loupeXY.current.x,
-                    ly0: loupeXY.current.y,
-                  });
-                loupeRef.current?.classList.add("held");
-                (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-                setHintGone(true);
-              }}
-              onPointerMove={(e) => {
-                const g = loupeGrab.current;
-                if (!g) return;
-                const { w, h } = bookDims();
-                const R = loupeSize() / 2;
-                loupeXY.current = {
-                  x: Math.max(-R * 0.7, Math.min(w + R * 0.7, g.lx0 + (e.clientX - g.cx))),
-                  y: Math.max(-R * 0.7, Math.min(h + R * 1.0, g.ly0 + (e.clientY - g.cy))),
-                };
-                placeLoupe();
-              }}
-              onPointerUp={() => {
-                loupeGrab.current = null;
-                loupeRef.current?.classList.remove("held");
-              }}
-              onPointerCancel={() => {
-                loupeGrab.current = null;
-                loupeRef.current?.classList.remove("held");
-              }}
+              onPointerDown={onLoupeDown}
+              onPointerMove={onLoupeMove}
+              onPointerUp={onLoupeDrop}
+              onPointerCancel={onLoupeDrop}
             />
             <span
               className="ring"
-              onPointerDown={(e) => {
-                if (!loupeOnRef.current || e.button !== 0) return;
-                e.preventDefault();
-                e.stopPropagation();
-                loupeTarget.current = null;
-                if (loupeXY.current.x !== null && loupeXY.current.y !== null) {
-                  loupeGrab.current = {
-                    cx: e.clientX,
-                    cy: e.clientY,
-                    lx0: loupeXY.current.x,
-                    ly0: loupeXY.current.y,
-                  };
-                }
-                loupeRef.current?.classList.add("held");
-                (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-                setHintGone(true);
-              }}
-              onPointerMove={(e) => {
-                const g = loupeGrab.current;
-                if (!g) return;
-                const { w, h } = bookDims();
-                const R = loupeSize() / 2;
-                loupeXY.current = {
-                  x: Math.max(-R * 0.7, Math.min(w + R * 0.7, g.lx0 + (e.clientX - g.cx))),
-                  y: Math.max(-R * 0.7, Math.min(h + R * 1.0, g.ly0 + (e.clientY - g.cy))),
-                };
-                placeLoupe();
-              }}
-              onPointerUp={() => {
-                loupeGrab.current = null;
-                loupeRef.current?.classList.remove("held");
-              }}
-              onPointerCancel={() => {
-                loupeGrab.current = null;
-                loupeRef.current?.classList.remove("held");
-              }}
+              onPointerDown={onLoupeDown}
+              onPointerMove={onLoupeMove}
+              onPointerUp={onLoupeDrop}
+              onPointerCancel={onLoupeDrop}
             >
               <span className="lens" />
             </span>
