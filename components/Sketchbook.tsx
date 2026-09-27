@@ -11,11 +11,16 @@ import {
   ZOOM_MIN,
   captionOpacities,
   dragToT,
+  homographyFrom4,
   leafAngles,
+  lensFit,
+  mat3Invert,
+  mat3ToCss,
   nextIndex,
   prevIndex,
   shouldCommit,
   stripLight,
+  type Mat3,
   type TurnDir,
 } from "@/lib/book-physics";
 import type { Plate } from "@/content/plates";
@@ -116,10 +121,18 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   const riffle = useRef<{ bell: number; dur: number }[]>([]);
   const riffleAt = useRef(0);
 
-  // loupe state (refs for 60fps, useState only for UI chrome)
+  // loupe state (refs for 60fps, useState only for UI chrome).
+  // loupeXY is in SCREEN pixels: the book is tilted/zoomed, so the only honest
+  // space to reason about is whatever getBoundingClientRect actually reports.
   const loupeXY = useRef<{ x: number | null; y: number | null }>({ x: null, y: null });
-  const loupeGrab = useRef<{ cx: number; cy: number; lx0: number; ly0: number } | null>(null);
+  // `ox/oy` is the offset from the grab point to the glass centre, so the glass
+  // keeps the spot you actually took hold of instead of snapping centre-under-cursor.
+  const loupeGrab = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
   const loupeTarget = useRef<{ x: number; y: number } | null>(null);
+  const pageMapRef = useRef<{
+    sig: string;
+    maps: { H: Mat3; Hinv: Mat3; w: number; h: number };
+  } | null>(null);
   const [loupeOn, setLoupeOn] = useState(true);
   const loupeOnRef = useRef(true);
   const [zoomRead, setZoomRead] = useState("100%");
@@ -135,6 +148,14 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     idxRef.current = idx;
     loupeOnRef.current = loupeOn;
   });
+
+  // Re-place once the toggle has actually committed. Doing it in the click
+  // handler ran a frame early, while loupeOnRef still held the old value, so
+  // the glass and its copy disagreed about being on.
+  useEffect(() => {
+    if (loupeOn && loupeXY.current.x === null) restLoupe();
+    else placeLoupe();
+  }, [loupeOn]);
 
   const folioOf = useCallback((i: number) => folio(i), []);
 
@@ -174,10 +195,12 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     box.style.setProperty("--rx", `${v.rx.toFixed(2)}deg`);
     box.style.setProperty("--ry", `${v.ry.toFixed(2)}deg`);
     box.style.setProperty("--zoom", v.z.toFixed(3));
-    if (v.z !== lastZ.current) {
-      lastZ.current = v.z;
-      placeLoupe();
-    }
+    // The glass does not move when the book leans, but the page underneath it
+    // does — so the copy has to be re-projected on every view frame, not just
+    // when the zoom changes. Clamp only when the box actually resized.
+    const resized = v.z !== lastZ.current;
+    lastZ.current = v.z;
+    syncLoupe(resized);
   }, []);
 
   const kick = useCallback(() => {
@@ -188,24 +211,130 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ---------------- loupe ---------------- */
+  /* ---------------- loupe ----------------
+     The glass lives in screen space and is positioned from the book's real
+     visual rect, so zoom, tilt and perspective are all accounted for without
+     being modelled. `.zoomwrap` (the magnified copy) and `.loupe` (the brass)
+     are both written here from the same gx/gy/r, which is what stops them
+     drifting apart. */
 
   const loupeSize = useCallback(() => {
     const book = bookRef.current;
     if (!book) return 220;
+    // Layout width, not visual width: a real magnifier keeps its physical size
+    // when you zoom the page underneath it.
     return Math.round(Math.max(165, Math.min(262, book.clientWidth * 0.235)));
   }, []);
 
-  function bookDims() {
+  function bookRect() {
     const book = bookRef.current;
-    if (!book) return { w: 0, h: 0 };
-    return { w: book.clientWidth, h: book.clientHeight };
+    if (!book) return null;
+    const r = book.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? r : null;
   }
 
+  /**
+   * The book's exact page-to-screen homography, plus its inverse.
+   *
+   * Built from the rendered transform rather than from tilt angles: read the
+   * live `matrix3d` off `.sb-tilt` and apply the stage's perspective to it. That
+   * means the copy registers against the *actual* projection, so it stays put
+   * under lean instead of only being right when the book is flat.
+   *
+   * Cached on a signature of everything that can change it, so dragging the
+   * glass does not re-solve the system every frame.
+   */
+  function pageMaps(): { H: Mat3; Hinv: Mat3; w: number; h: number } | null {
+    const tilt = tiltRef.current;
+    const box = boxRef.current;
+    const book = bookRef.current;
+    if (!tilt || !box || !book) return null;
+
+    const bw = book.clientWidth;
+    const bh = book.clientHeight;
+    const csBox = getComputedStyle(box);
+    const persp = csBox.perspective === "none" ? 0 : parseFloat(csBox.perspective) || 0;
+    // perspective-origin and transform-origin both resolve against their OWN
+    // element's box, which are different elements here — read each from the
+    // element it belongs to rather than assuming they match.
+    const po = (csBox.perspectiveOrigin || "0 0").trim().split(/\s+/).map(parseFloat);
+    const ox = po[0] || 0;
+    const oy = po[1] || 0;
+    const csTilt = getComputedStyle(tilt);
+    const org = (csTilt.transformOrigin || "0 0").trim().split(/\s+/).map(parseFloat);
+    const sig = `${csTilt.transform}|${csTilt.transformOrigin}|${persp}|${ox}|${oy}|${bw}|${bh}`;
+
+    if (pageMapRef.current && pageMapRef.current.sig === sig) return pageMapRef.current.maps;
+
+    const m = new DOMMatrixReadOnly(
+      csTilt.transform && csTilt.transform !== "none" ? csTilt.transform : "matrix(1,0,0,1,0,0)",
+    );
+    // Fold transform-origin into the matrix so the result maps book-local
+    // coordinates directly, with no implicit centre.
+    const total = new DOMMatrix()
+      .translate(org[0] || 0, org[1] || 0)
+      .multiply(m)
+      .translate(-(org[0] || 0), -(org[1] || 0));
+
+    // Project into .sb-3d-LOCAL space (the frame .zoomwrap is rendered in), not
+    // viewport space: the lens and the copy are both children of .sb-3d, so
+    // mixing in the box's screen offset is what desynchronised them.
+    const project = (x: number, y: number) => {
+      const p = new DOMPoint(x, y, 0).matrixTransform(total);
+      if (!persp) return { x: p.x, y: p.y };
+      const k = persp / (persp - p.z); // perspective divide about the origin
+      return { x: ox + (p.x - ox) * k, y: oy + (p.y - oy) * k };
+    };
+
+    const H = homographyFrom4(
+      [
+        { x: 0, y: 0 },
+        { x: bw, y: 0 },
+        { x: 0, y: bh },
+        { x: bw, y: bh },
+      ],
+      [project(0, 0), project(bw, 0), project(0, bh), project(bw, bh)],
+    );
+    const Hinv = H ? mat3Invert(H) : null;
+    if (!H || !Hinv) return null;
+
+    const maps = { H, Hinv, w: bw, h: bh };
+    pageMapRef.current = { sig, maps };
+    return maps;
+  }
+
+  /** Park the glass at the bottom-right of the page, in screen space. */
   function restLoupe() {
-    const { w, h } = bookDims();
-    if (!w) return;
-    loupeXY.current = { x: w * 0.88, y: h * 0.855 };
+    const br = bookRect();
+    if (!br) return;
+    const R = loupeSize() / 2;
+    loupeXY.current = { x: br.right - R - R * 0.18, y: br.bottom - R - R * 0.1 };
+    placeLoupe();
+  }
+
+  /** Keep the glass within reach of the page after a resize or a re-place. */
+  function clampLoupe() {
+    const p = loupeXY.current;
+    const br = bookRect();
+    if (p.x === null || p.y === null || !br) return;
+    const R = loupeSize() / 2;
+    p.x = Math.max(br.left - R * 0.7, Math.min(br.right + R * 0.7, p.x));
+    p.y = Math.max(br.top - R * 0.7, Math.min(br.bottom + R * 0.7, p.y));
+  }
+
+  /**
+   * The glass lives in screen space, so it has to be re-fitted whenever the
+   * book's on-screen box moves. `reclamp` is for genuine size changes (resize,
+   * zoom); scrolling only needs a re-fit, never a clamp, or a glass parked
+   * deliberately off the edge would be dragged back on every scroll tick.
+   */
+  function syncLoupe(reclamp: boolean) {
+    const p = loupeXY.current;
+    if (p.x === null || p.y === null) {
+      restLoupe();
+      return;
+    }
+    if (reclamp) clampLoupe();
     placeLoupe();
   }
 
@@ -213,52 +342,87 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     const loupe = loupeRef.current;
     const zw = zoomWrapRef.current;
     const zi = zoomInnerRef.current;
-    const { x: lx, y: ly } = loupeXY.current;
-    if (lx === null || ly === null || !loupe || !zw || !zi) return;
-    const { w: bw, h: bh } = bookDims();
-    if (!bw) return;
+    const box = boxRef.current;
+    const { x: gx, y: gy } = loupeXY.current;
+    if (gx === null || gy === null || !loupe || !zw || !zi || !box) return;
+    const br = bookRect();
+    if (!br) return;
+
+    const book = bookRef.current!;
     const R = loupeSize() / 2;
-    const bez = R * 2 * 0.058;
-    loupe.style.setProperty("--lr", `${R * 2}px`);
-    loupe.style.transform = `translate3d(${(lx - R).toFixed(1)}px,${(ly - R).toFixed(1)}px,0)`;
+    const d = R * 2;
+
+    loupe.style.setProperty("--lr", `${d}px`);
+    zw.style.setProperty("--lr", `${d}px`);
     loupe.classList.toggle("on", loupeOnRef.current);
 
-    const z = view.current.z;
-    const cx = bw / 2;
-    const cy = bh / 2;
-    const x0 = cx - (bw / 2) * z;
-    const x1 = cx + (bw / 2) * z;
-    const y0 = cy - (bh / 2) * z;
-    const y1 = cy + (bh / 2) * z;
-    const nx = Math.max(x0, Math.min(lx, x1));
-    const ny = Math.max(y0, Math.min(ly, y1));
-    const inside =
-      lx > x0 && lx < x1 && ly > y0 && ly < y1
-        ? Math.min(lx - x0, x1 - lx, ly - y0, y1 - ly)
-        : -Math.hypot(lx - nx, ly - ny);
-    const k = Math.max(0, Math.min(1, (inside + R * 0.3) / (R * 0.55)));
-    zw.style.opacity = (loupeOnRef.current ? k : 0).toFixed(3);
-    if (k <= 0.002) return;
-    const r = (R - bez).toFixed(1);
-    const mask = `radial-gradient(circle ${r}px at ${lx.toFixed(1)}px ${ly.toFixed(1)}px,#000 calc(100% - 1px),transparent 100%)`;
-    (zw.style as CSSStyleDeclaration).webkitMaskImage = mask;
-    zw.style.maskImage = mask;
-    const px = cx + (lx - cx) / z;
-    const py = cy + (ly - cy) / z;
-    const s = MAG * z;
-    zi.style.transform = `translate(${(lx - px * s).toFixed(1)}px,${(ly - py * s).toFixed(1)}px) scale(${s.toFixed(4)})`;
+    // loupeXY is in viewport pixels. The glass and the copy are both children of
+    // .sb-3d, so everything below works in .sb-3d-LOCAL space: subtract the
+    // box's screen origin once, here, and never mix frames again.
+    const boxRect = box.getBoundingClientRect();
+    const gxl = gx - boxRect.left;
+    const gyl = gy - boxRect.top;
+    const lx = gxl - R;
+    const ly = gyl - R;
+
+    // Both elements share this transform, so the copy sits exactly in the glass.
+    const place = `translate3d(${lx.toFixed(1)}px,${ly.toFixed(1)}px,0)`;
+    loupe.style.transform = place;
+    zw.style.transform = place;
+
+    const fit = lensFit(gx, gy, R, br, book.clientWidth, book.clientHeight, MAG);
+
+    // Project the copy with the book's own homography and magnify by MAG about
+    // the page point under the glass.
+    //
+    // A homography maps POINTS, not vectors, so the whole thing collapses to a
+    // single scale-then-project plus one translation. Since H(pg) is by
+    // definition the glass centre, that translation is just (R - MAG*centre):
+    //
+    //   p  ->  centre + MAG * H * (p - pg)
+    //
+    // Getting this wrong (applying H to a vector, or double-counting the box
+    // origin) shows up as a constant offset equal to the glass position, which
+    // is exactly the desync this replaces.
+    const maps = pageMaps();
+    if (maps) {
+      zi.style.width = `${maps.w}px`;
+      zi.style.height = `${maps.h}px`;
+      // .zoominner is positioned at left:0/top:0 inside .zoomwrap, which is
+      // itself at left:0/top:0 inside .sb-3d — so the chain shares .sb-3d's
+      // origin and the projection below needs no extra frame shift.
+      zi.style.transform =
+        `translate(${(R - MAG * gxl).toFixed(2)}px,${(R - MAG * gyl).toFixed(2)}px)` +
+        ` scale(${MAG})` +
+        ` ${mat3ToCss(maps.H)}`;
+    } else {
+      // Degenerate transform (zero-size book, singular matrix): fall back to the
+      // axis-aligned fit so the glass still works instead of vanishing.
+      const f = lensFit(gx, gy, R, br, book.clientWidth, book.clientHeight, MAG);
+      zi.style.width = `${book.clientWidth}px`;
+      zi.style.height = `${book.clientHeight}px`;
+      zi.style.transform =
+        `translate(${(R - MAG * gxl).toFixed(2)}px,${(R - MAG * gyl).toFixed(2)}px)` +
+        ` scale(${f.sx.toFixed(4)},${f.sy.toFixed(4)})`;
+    }
+
+    // Written unconditionally: a stale mask/transform is what made the glass
+    // flash the wrong region when it came back onto the page.
+    zw.style.opacity = (loupeOnRef.current ? fit.k : 0).toFixed(3);
   }
 
+  /** Slide the glass aside so a page turn does not sweep it. */
   function shoveLoupe(dir: TurnDir) {
     if (!loupeOnRef.current) return;
-    const { x: lx, y: ly } = loupeXY.current;
-    if (lx === null || ly === null || loupeGrab.current) return;
-    const { w, h } = bookDims();
-    if (!w) return;
-    const nx = (w / 2 + (lx - w / 2) / view.current.z) / w;
-    const ny = (h / 2 + (ly - h / 2) / view.current.z) / h;
-    if (nx < 0.02 || nx > 0.98 || ny < 0.02 || ny > 0.98) return;
-    loupeTarget.current = { x: w * (dir === "next" ? 0.12 : 0.88), y: h * 0.855 };
+    const p = loupeXY.current;
+    if (p.x === null || p.y === null || loupeGrab.current) return;
+    const br = bookRect();
+    if (!br) return;
+    const R = loupeSize() / 2;
+    loupeTarget.current = {
+      x: dir === "next" ? br.left + R * 0.55 : br.right - R * 0.55,
+      y: br.bottom - R * 0.55,
+    };
     kick();
   }
 
@@ -269,17 +433,17 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       loupeTarget.current = null;
       return false;
     }
-    const { x: lx, y: ly } = loupeXY.current;
-    if (lx === null || ly === null) return false;
-    const dx = t.x - lx;
-    const dy = t.y - ly;
+    const p = loupeXY.current;
+    if (p.x === null || p.y === null) return false;
+    const dx = t.x - p.x;
+    const dy = t.y - p.y;
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
       loupeXY.current = { x: t.x, y: t.y };
       loupeTarget.current = null;
       placeLoupe();
       return false;
     }
-    loupeXY.current = { x: lx + dx * 0.17, y: ly + dy * 0.17 };
+    loupeXY.current = { x: p.x + dx * 0.17, y: p.y + dy * 0.17 };
     placeLoupe();
     return true;
   }
@@ -291,12 +455,13 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     e.preventDefault();
     e.stopPropagation();
     loupeTarget.current = null;
-    if (loupeXY.current.x !== null && loupeXY.current.y !== null) {
+    const p = loupeXY.current;
+    if (p.x !== null && p.y !== null) {
       loupeGrab.current = {
-        cx: e.clientX,
-        cy: e.clientY,
-        lx0: loupeXY.current.x,
-        ly0: loupeXY.current.y,
+        px: e.clientX,
+        py: e.clientY,
+        ox: p.x - e.clientX,
+        oy: p.y - e.clientY,
       };
     }
     loupeRef.current?.classList.add("held");
@@ -308,12 +473,10 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     const g = loupeGrab.current;
     if (!g) return;
     e.stopPropagation();
-    const { w, h } = bookDims();
-    const R = loupeSize() / 2;
-    loupeXY.current = {
-      x: Math.max(-R * 0.7, Math.min(w + R * 0.7, g.lx0 + (e.clientX - g.cx))),
-      y: Math.max(-R * 0.7, Math.min(h + R * 1.0, g.ly0 + (e.clientY - g.cy))),
-    };
+    // Pointer + the offset captured at grab time: the glass stays under the
+    // same spot of the grip you took hold of.
+    loupeXY.current = { x: e.clientX + g.ox, y: e.clientY + g.oy };
+    clampLoupe();
     placeLoupe();
   }
 
@@ -621,17 +784,23 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     }, 350);
     const onResize = () => {
       layout();
-      const { w, h } = bookDims();
-      if (loupeXY.current.x === null && w) {
-        restLoupe();
-      } else {
-        placeLoupe();
-      }
-      void h;
+      syncLoupe(true);
     };
     window.addEventListener("resize", onResize);
+
+    /* The book can move on screen without a resize firing: scrolling, web-font
+       swap, or a layout shift above it. Screen-space glass desyncs silently in
+       those cases, so watch the box itself. ResizeObserver catches size/zoom
+       changes; the scroll listener catches position changes. */
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncLoupe(true)) : null;
+    if (ro && bookRef.current) ro.observe(bookRef.current);
+    const onScroll = () => syncLoupe(false);
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+
     return () => {
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      ro?.disconnect();
       clearTimeout(t);
       if (raf.current !== null) cancelAnimationFrame(raf.current);
       raf.current = null;
@@ -899,15 +1068,10 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
         </button>
         <span className="mx-0.5 h-[17px] w-px bg-[rgba(43,39,33,0.14)]" aria-hidden="true" />
         <button
-          className={`inline-flex h-7 w-7 items-center justify-center rounded-full border-0 transition-colors ${loupeOn ? "bg-[rgba(154,106,62,0.16)] text-[#9a6a3e]" : "bg-transparent text-[rgba(43,39,33,0.58)] hover:bg-[rgba(255,252,244,0.9)] hover:text-[#2b2721]"}`}
+          className={`sb-loupe-btn inline-flex h-7 w-7 items-center justify-center rounded-full border-0 transition-colors ${loupeOn ? "bg-[rgba(154,106,62,0.16)] text-[#9a6a3e]" : "bg-transparent text-[rgba(43,39,33,0.58)] hover:bg-[rgba(255,252,244,0.9)] hover:text-[#2b2721]"}`}
           aria-label="magnifier"
           aria-pressed={loupeOn}
-          onClick={() => {
-            const next = !loupeOn;
-            setLoupeOn(next);
-            if (next && loupeXY.current.x === null) restLoupe();
-            else placeLoupe();
-          }}
+          onClick={() => setLoupeOn((v) => !v)}
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="block h-[15px] w-[15px]">
             <circle cx="8.8" cy="8.8" r="5.8" />

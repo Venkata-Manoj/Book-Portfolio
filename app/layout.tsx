@@ -16,14 +16,34 @@ const body = Newsreader({
   display: "swap",
 });
 
+/**
+ * Absolute base for social preview URLs. Vercel injects
+ * VERCEL_PROJECT_PRODUCTION_URL automatically, so link previews resolve to the
+ * real domain with zero configuration. Set NEXT_PUBLIC_SITE_URL to override —
+ * only needed if you later attach a custom domain.
+ */
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
 export const metadata: Metadata = {
-  title: "B V Manoj — Portfolio Sketchbook",
+  metadataBase: new URL(siteUrl),
+  title: "B V Manoj Book Portfolio",
   description:
     "AI/ML undergraduate building production-grade GenAI & LLM apps. A page-flipping sketchbook: drag a page to turn it, drag the brass glass to read the ink up close.",
   openGraph: {
-    title: "B V Manoj — Portfolio Sketchbook",
+    title: "B V Manoj Book Portfolio",
     description: "Drag the page to turn · Drag the glass across it",
     type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "B.V Manoj Book Portfolio" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "B V Manoj Book Portfolio",
+    description: "Drag the page to turn · Drag the glass across it",
+    images: ["/og-image.png"],
   },
   icons: {
     // Regenerate this set from public/favicon.png with: python3 scripts/make-icons.py
