@@ -42,6 +42,8 @@ export interface Plate {
   headline: string;
   /** supporting line */
   sub: string;
+  /** when present, the sub line becomes a clickable link (e.g. mailto:) */
+  subLink?: string;
   /** body paragraph for the left page — keep under ~240 characters */
   body: string;
   /** accent wash colour for this spread */
@@ -120,11 +122,11 @@ export interface Plate {
 export const PLATES: Plate[] = [
   {
     title: "Cover",
-    place: "Vol. 01",
+    place: "Portfolio",
     kicker: "Portfolio · 2026",
     headline: "B V Manoj",
     sub: "AI undergrad — production-grade GenAI & LLM apps",
-    body: "This sketchbook is a working book of my work. Drag a page to turn it. Drag the brass glass to read the ink up close. Five deployed projects, inside.",
+    body: "This sketchbook is a working book of my work. Drag a page to turn it. Drag the brass glass to read the ink up close.",
     accent: "#9a6a3e",
     motif: "sun",
     image: "/Manoj.jpeg",
@@ -132,7 +134,7 @@ export const PLATES: Plate[] = [
   },
   {
     title: "About",
-    place: "Chapter 01",
+    place: "Profile",
     kicker: "Hello — start here",
     headline: "I ship AI that survives contact with users",
     sub: "AI Engineer · Data Scientist · Full-Stack Developer",
@@ -201,29 +203,20 @@ export const PLATES: Plate[] = [
     kicker: "Where I've been",
     headline: "Discipline by day, hackathons by night",
     sub: "B.Tech SIMATS 9.2 · HSC 95.6% · SSC 85%",
-    body: "B.Tech at Saveetha School of Engineering, 2024–2028; SR Junior College, Vijayawada before that. 1st prize at Vel Tech Hackathon 2024 for an AI healthcare solution; national finalist at Smart India Hackathon 2025 (Top 50 of 15,000+); core member of the SIMATS Hackathon Club. Sealed with DataCamp LLM, RAG and multi-step-chain certifications plus Anthropic prompt engineering.",
+    body: "B.Tech at Saveetha School of Engineering, 2024–2028. 1st prize at Vel Tech Hackathon 2024 for an AI agricultural solution; core member of the SIMATS Hackathon Club. Sealed with DataCamp LLM, RAG and multi-step-chain certifications plus Anthropic prompt engineering.",
     accent: "#9a6a3e",
     motif: "sun",
   },
   {
     title: "Contact",
-    place: "Last page",
+    place: "Contact",
     kicker: "Write to me",
     headline: "Let's build something that ships",
     sub: "bvmanoj61@gmail.com — replies within a day",
-    body: "Tap any plate below to jump straight to it. bvmanoj61@gmail.com · GitHub Venkata-Manoj · LinkedIn venkata-manoj. Fluent in English, native in Telugu, conversational in Hindi & Tamil.",
+    subLink: "mailto:bvmanoj61@gmail.com",
+    body: "Tap any plate below to jump straight to it. [bvmanoj61@gmail.com](mailto:bvmanoj61@gmail.com) · [GitHub Venkata-Manoj](https://github.com/Venkata-Manoj) · [LinkedIn venkata-manoj](https://linkedin.com/in/venkata-manoj). Fluent in English, native in Telugu, conversational in Hindi & Tamil.",
     accent: "#2b2721",
     motif: "arches",
-  },
-  {
-    title: "Field notes",
-    place: "Appendix",
-    kicker: "More from the bench",
-    headline: "Small builds, sharp lessons",
-    sub: "RL · Vision · Shipped tools",
-    body: "Resilience-Ops-Env — a Gym-style RL world where agents triage simulated infra incidents. Sign-Language-TTS — realtime sign recognition with LSTM, MediaPipe and speech output. IdeaForge_2k26 — live e-certificate issuance and verification, glassmorphism UI included.",
-    accent: "#4e6b5d",
-    motif: "orbit",
   },
 ];
 

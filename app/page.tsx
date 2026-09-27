@@ -126,7 +126,7 @@ export default function Page() {
         </section>
 
         <p className="mt-[clamp(48px,7vh,84px)] pb-11 text-center text-[11.5px] tracking-[0.24em] text-[rgba(43,39,33,0.36)] uppercase">
-          India · Sketchbook · Vol. 01
+          India · AI / ML Engineer · Vol. 01
         </p>
       </main>
     </>

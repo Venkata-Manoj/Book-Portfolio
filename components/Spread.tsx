@@ -134,6 +134,33 @@ function PlateLinks({ plate }: { plate: Plate }) {
   );
 }
 
+/** Parse [text](url) inline links in body copy. */
+function renderBody(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let k = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <a
+        key={k++}
+        href={m[2]}
+        target="_blank"
+        rel="me noopener"
+        onPointerDown={(e) => e.stopPropagation()}
+        className="pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-2 transition-colors hover:decoration-[#2b2721]"
+      >
+        {m[1]}
+      </a>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
   return (
     <div className="paper-grain relative grid h-full w-full grid-cols-2 overflow-hidden rounded-[10px] bg-[#f6f1e6] shadow-[inset_0_0_60px_rgba(120,90,50,0.12)]">
@@ -156,11 +183,11 @@ export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
             className="max-w-[34ch] text-[clamp(8px,1.35vw,13.5px)] font-light leading-[1.7]"
             style={{ color: "rgba(43,39,33,0.82)" }}
           >
-            {plate.body}
+            {renderBody(plate.body)}
           </p>
           <PlateLinks plate={plate} />
           <p className="mt-[5%] text-[clamp(6px,1vw,9px)] uppercase tracking-[0.2em] text-[rgba(43,39,33,0.36)]">
-            Ink · wash · {plate.place}
+            {plate.place}
           </p>
         </div>
       </div>
@@ -182,7 +209,17 @@ export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
             {plate.headline}
           </h2>
           <p className="mt-[3%] text-[clamp(8px,1.3vw,12.5px)] font-light tracking-wide text-[rgba(43,39,33,0.6)]">
-            {plate.sub}
+            {plate.subLink ? (
+              <a
+                href={plate.subLink}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-2 transition-colors hover:decoration-[#2b2721]"
+              >
+                {plate.sub}
+              </a>
+            ) : (
+              plate.sub
+            )}
           </p>
           <div className="mt-[5%] flex justify-end">
             <span className="block h-px w-[38%]" style={{ background: plate.accent, opacity: 0.7 }} />

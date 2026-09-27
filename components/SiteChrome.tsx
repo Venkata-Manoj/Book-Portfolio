@@ -37,6 +37,14 @@ export function TopBar() {
               <path d="m3.2 6.4 8.8 6.6 8.8-6.6" />
             </svg>
           </a>
+          <a href="/Resume_Manoj.pdf" target="_blank" rel="noopener" aria-label="Resume" className="p-1 text-[rgba(43,39,33,0.58)] hover:text-[#2b2721]">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="block h-4 w-4" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M12 18v-6" />
+              <path d="m9 15 3 3 3-3" />
+            </svg>
+          </a>
         </div>
       </nav>
     </header>
