@@ -1,6 +1,7 @@
 "use client";
 
 import type { Plate } from "@/content/plates";
+import Image from "next/image";
 import { Motif } from "./Motif";
 
 /**
@@ -50,11 +51,13 @@ function PlateMedia({ plate }: { plate: Plate }) {
   if (plate.image) {
     return (
       <figure className="m-0 mt-[5%]">
-        <img
+        <Image
           src={plate.image}
           alt={plate.imageAlt ?? plate.imageCaption ?? plate.title}
+          width={1448}
+          height={1086}
+          sizes="(max-width: 900px) 40vw, 280px"
           draggable={false}
-          decoding="async"
           className={`aspect-[4/5] w-[62%] rotate-[-1.5deg] ${FRAME}`}
           style={{ background: "#fbf8f0" }}
         />
