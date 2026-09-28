@@ -26,13 +26,6 @@ export const ZOOM_MAX = 1.5;
 
 export type TurnDir = "next" | "prev";
 
-export interface TurnState {
-  dir: TurnDir;
-  from: number;
-  to: number;
-  t: number; // 0..1 progress
-}
-
 /** Total leaf rotation + per-strip delta, in degrees, for a given t. */
 export function leafAngles(t: number): { tt: number; td: number; shade: number } {
   const th = Math.PI * t;
@@ -78,16 +71,15 @@ export function prevIndex(i: number, m: number): number {
   return (i - 1 + m) % m;
 }
 
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
 /** Caption crossfade: old title leaves before the new one arrives. */
 export function captionOpacities(t: number): { out: number; inn: number } {
-  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
   return {
     out: 1 - clamp01((t - 0.1) / 0.28),
     inn: clamp01((t - 0.56) / 0.3),
   };
 }
-
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /** An on-screen rectangle, in viewport pixels. */
 export interface Rect {
@@ -109,12 +101,6 @@ export interface LensFit {
    */
   sx: number;
   sy: number;
-  /** Translate applied *before* the scale, in lens-local pixels. */
-  tx: number;
-  ty: number;
-  /** Book-local normalized coords under the glass centre (0..1 while over the page). */
-  u: number;
-  v: number;
 }
 
 /**
@@ -157,12 +143,6 @@ export function lensFit(
     k,
     sx,
     sy,
-    // Place book-local (u*bookW, v*bookH) — the point under the glass — at the
-    // lens centre (r, r).
-    tx: r - u * bookW * sx,
-    ty: r - v * bookH * sy,
-    u,
-    v,
   };
 }
 
@@ -188,29 +168,6 @@ export type Mat3 = readonly [
   number, number, number,
   number, number, number,
 ];
-
-/** Map a point through a homography, applying the perspective divide. */
-export function mat3Apply(m: Mat3, x: number, y: number): { x: number; y: number } {
-  const w = m[6] * x + m[7] * y + m[8];
-  if (w === 0) return { x: 0, y: 0 };
-  return { x: (m[0] * x + m[1] * y + m[2]) / w, y: (m[3] * x + m[4] * y + m[5]) / w };
-}
-
-/** Closed-form inverse. Returns null when singular. */
-export function mat3Invert(m: Mat3): Mat3 | null {
-  const [a, b, c, d, e, f, g, h, i] = m;
-  const A = e * i - f * h;
-  const B = f * g - d * i;
-  const C = d * h - e * g;
-  const det = a * A + b * B + c * C;
-  if (!det || !Number.isFinite(det)) return null;
-  const k = 1 / det;
-  return [
-    A * k, (c * h - b * i) * k, (b * f - c * e) * k,
-    B * k, (a * i - c * g) * k, (c * d - a * f) * k,
-    C * k, (b * g - a * h) * k, (a * e - b * d) * k,
-  ];
-}
 
 /**
  * Render a homography as a CSS `matrix3d` acting on the z = 0 plane.

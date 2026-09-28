@@ -22,8 +22,10 @@ export function ContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errors, setErrors] = useState<FieldErrors>({});
+  const sending = status === "sending";
 
   function validate(): boolean {
     const e: FieldErrors = {};
@@ -35,24 +37,42 @@ export function ContactForm() {
     else if (message.trim().length < 10)
       e.message = "A few more words would help (min 10 characters).";
     setErrors(e);
-    return Object.keys(e).length === 0;
+    if (Object.keys(e).length > 0) {
+      const firstInvalid = e.name
+        ? "contact-name"
+        : e.email
+          ? "contact-email"
+          : "contact-message";
+      document.getElementById(firstInvalid)?.focus();
+      return false;
+    }
+    return true;
   }
 
   async function onSubmit(ev: React.FormEvent<HTMLFormElement>) {
     ev.preventDefault();
     if (status === "sending") return;
     if (!validate()) return;
+    if (website.trim()) {
+      setStatus("sent");
+      return;
+    }
     setStatus("sending");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ name: name.trim(), email: email.trim(), message: message.trim() }),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error(`Formspree responded ${res.status}`);
       setStatus("sent");
     } catch {
       setStatus("error");
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -60,6 +80,7 @@ export function ContactForm() {
     setName("");
     setEmail("");
     setMessage("");
+    setWebsite("");
     setStatus("idle");
     setErrors({});
   }
@@ -120,10 +141,17 @@ export function ContactForm() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
+            maxLength={100}
+            disabled={sending}
             className={`${inputClass} ${errors.name ? inputErr : inputOk}`}
             aria-invalid={!!errors.name}
+            aria-describedby={errors.name ? "contact-name-error" : undefined}
           />
-          {errors.name && <p className={errorClass}>{errors.name}</p>}
+          {errors.name && (
+            <p id="contact-name-error" role="alert" className={errorClass}>
+              {errors.name}
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="contact-email" className={labelClass}>
@@ -137,10 +165,17 @@ export function ContactForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            maxLength={254}
+            disabled={sending}
             className={`${inputClass} ${errors.email ? inputErr : inputOk}`}
             aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "contact-email-error" : undefined}
           />
-          {errors.email && <p className={errorClass}>{errors.email}</p>}
+          {errors.email && (
+            <p id="contact-email-error" role="alert" className={errorClass}>
+              {errors.email}
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="contact-message" className={labelClass}>
@@ -153,10 +188,42 @@ export function ContactForm() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="What would you like to build?"
+            maxLength={5000}
+            disabled={sending}
             className={`${inputClass} resize-y ${errors.message ? inputErr : inputOk}`}
             aria-invalid={!!errors.message}
+            aria-describedby={errors.message ? "contact-message-error" : undefined}
           />
-          {errors.message && <p className={errorClass}>{errors.message}</p>}
+          {errors.message && (
+            <p id="contact-message-error" role="alert" className={errorClass}>
+              {errors.message}
+            </p>
+          )}
+        </div>
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            top: "auto",
+            width: "1px",
+            height: "1px",
+            overflow: "hidden",
+          }}
+        >
+          <label htmlFor="contact-ref">
+            Reference
+            <input
+              id="contact-ref"
+              name="contact_ref"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              disabled={sending}
+            />
+          </label>
         </div>
         <div>
           <button

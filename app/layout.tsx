@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Newsreader } from "next/font/google";
 import "./globals.css";
 
@@ -26,17 +26,29 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : "http://localhost:3000");
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
+
+export const viewport: Viewport = {
+  themeColor: "#ece7dc",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "B V Manoj Book Portfolio",
   description:
     "AI/ML undergraduate building production-grade GenAI & LLM apps. A page-flipping sketchbook: drag a page to turn it, drag the brass glass to read the ink up close.",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "B V Manoj Book Portfolio",
     description: "Drag the page to turn · Drag the glass across it",
     type: "website",
+    url: "/",
+    siteName: "B V Manoj Book Portfolio",
+    locale: "en_US",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "B.V Manoj Book Portfolio" }],
   },
   twitter: {

@@ -14,7 +14,6 @@ import {
   homographyFrom4,
   leafAngles,
   lensFit,
-  mat3Invert,
   mat3ToCss,
   nextIndex,
   prevIndex,
@@ -51,6 +50,13 @@ const folio = (i: number) => String(i + 1).padStart(2, "0");
 
 const STORAGE_KEY = "sketchbook:index";
 
+type ViewState = { rx: number; ry: number; z: number; trx: number; try_: number; tz: number };
+const VIEW_PAIRS: readonly (readonly [keyof ViewState, keyof ViewState])[] = [
+  ["rx", "trx"],
+  ["ry", "try_"],
+  ["z", "tz"],
+];
+
 function readSavedIndex(total: number): number | null {
   try {
     if (typeof window === "undefined") return null;
@@ -80,6 +86,7 @@ function Half({ plate, folio: f, side }: { plate: Plate; folio: string; side: "l
     <div
       className={`absolute top-0 bottom-0 w-1/2 overflow-hidden ${side === "left" ? "left-0" : "left-1/2"}`}
       aria-hidden="true"
+      inert
     >
       <div className={`h-full w-[200%] ${side === "right" ? "-ml-[100%]" : ""}`}>
         <Spread plate={plate} folio={f} />
@@ -94,12 +101,10 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   const [idx, setIdx] = useState(landing);
   const [turn, setTurn] = useState<{ dir: TurnDir; from: number; to: number } | null>(null);
 
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<HTMLDivElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null); // sb-3d
-  const stripRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const stripRefs = useRef<(HTMLDivElement | null)[]>(Array.from({ length: N_STRIPS }, () => null));
   const capOutRef = useRef<HTMLParagraphElement>(null);
   const capInRef = useRef<HTMLParagraphElement>(null);
   const capSingleRef = useRef<HTMLParagraphElement>(null);
@@ -114,7 +119,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   const raf = useRef<number | null>(null);
   const last = useRef(0);
   const drag = useRef<{ dir: TurnDir; x0: number; w: number; moved: number; vel: number; tPrev: number } | null>(null);
-  const view = useRef({ rx: 0, ry: 0, z: 1, trx: 0, try_: 0, tz: 1 });
+  const view = useRef<ViewState>({ rx: 0, ry: 0, z: 1, trx: 0, try_: 0, tz: 1 });
   const viewActive = useRef(false);
   const lastZ = useRef(1);
   const introOn = useRef(false);
@@ -131,12 +136,17 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   const loupeTarget = useRef<{ x: number; y: number } | null>(null);
   const pageMapRef = useRef<{
     sig: string;
-    maps: { H: Mat3; Hinv: Mat3; w: number; h: number };
+    maps: { H: Mat3; w: number; h: number };
   } | null>(null);
   const [loupeOn, setLoupeOn] = useState(true);
   const loupeOnRef = useRef(true);
   const [zoomRead, setZoomRead] = useState("100%");
   const [zoomed, setZoomed] = useState({ out: false, in: false });
+  const zoomReadRef = useRef("100%");
+  const zoomedRef = useRef({ out: false, in: false });
+  const tiltRectRef = useRef<{ r: DOMRect; at: number } | null>(null);
+  const aliveRef = useRef(true);
+  const [finePointer, setFinePointer] = useState(true);
   const [hintGone, setHintGone] = useState(false);
   const [introClass, setIntroClass] = useState("");
   const reduced = useRef(false);
@@ -151,10 +161,11 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
 
   // Re-place once the toggle has actually committed. Doing it in the click
   // handler ran a frame early, while loupeOnRef still held the old value, so
-  // the glass and its copy disagreed about being on.
+  // the glass and its copy disagreed about being on. Clamp (not just place):
+  // scroll/resize handlers skip syncing while the loupe is off, so the stored
+  // coords may be stale relative to the current page box.
   useEffect(() => {
-    if (loupeOn && loupeXY.current.x === null) restLoupe();
-    else placeLoupe();
+    syncLoupe(true);
   }, [loupeOn]);
 
   const folioOf = useCallback((i: number) => folio(i), []);
@@ -234,7 +245,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   }
 
   /**
-   * The book's exact page-to-screen homography, plus its inverse.
+   * The book's exact page-to-screen homography.
    *
    * Built from the rendered transform rather than from tilt angles: read the
    * live `matrix3d` off `.sb-tilt` and apply the stage's perspective to it. That
@@ -244,7 +255,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
    * Cached on a signature of everything that can change it, so dragging the
    * glass does not re-solve the system every frame.
    */
-  function pageMaps(): { H: Mat3; Hinv: Mat3; w: number; h: number } | null {
+  function pageMaps(): { H: Mat3; w: number; h: number } | null {
     const tilt = tiltRef.current;
     const box = boxRef.current;
     const book = bookRef.current;
@@ -266,9 +277,14 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
 
     if (pageMapRef.current && pageMapRef.current.sig === sig) return pageMapRef.current.maps;
 
-    const m = new DOMMatrixReadOnly(
-      csTilt.transform && csTilt.transform !== "none" ? csTilt.transform : "matrix(1,0,0,1,0,0)",
-    );
+    let m: DOMMatrixReadOnly;
+    try {
+      m = new DOMMatrixReadOnly(
+        csTilt.transform && csTilt.transform !== "none" ? csTilt.transform : "matrix(1,0,0,1,0,0)",
+      );
+    } catch {
+      return null;
+    }
     // Fold transform-origin into the matrix so the result maps book-local
     // coordinates directly, with no implicit centre.
     const total = new DOMMatrix()
@@ -295,10 +311,9 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       ],
       [project(0, 0), project(bw, 0), project(0, bh), project(bw, bh)],
     );
-    const Hinv = H ? mat3Invert(H) : null;
-    if (!H || !Hinv) return null;
+    if (!H) return null;
 
-    const maps = { H, Hinv, w: bw, h: bh };
+    const maps = { H, w: bw, h: bh };
     pageMapRef.current = { sig, maps };
     return maps;
   }
@@ -340,20 +355,13 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
 
   function placeLoupe() {
     const loupe = loupeRef.current;
-    const zw = zoomWrapRef.current;
-    const zi = zoomInnerRef.current;
     const box = boxRef.current;
     const { x: gx, y: gy } = loupeXY.current;
-    if (gx === null || gy === null || !loupe || !zw || !zi || !box) return;
-    const br = bookRect();
-    if (!br) return;
-
-    const book = bookRef.current!;
+    if (gx === null || gy === null || !loupe || !box) return;
     const R = loupeSize() / 2;
     const d = R * 2;
 
     loupe.style.setProperty("--lr", `${d}px`);
-    zw.style.setProperty("--lr", `${d}px`);
     loupe.classList.toggle("on", loupeOnRef.current);
 
     // loupeXY is in viewport pixels. The glass and the copy are both children of
@@ -368,7 +376,20 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     // Both elements share this transform, so the copy sits exactly in the glass.
     const place = `translate3d(${lx.toFixed(1)}px,${ly.toFixed(1)}px,0)`;
     loupe.style.transform = place;
+
+    // The magnified copy only mounts when the loupe is on with a fine pointer;
+    // the glass above must keep tracking regardless.
+    const zw = zoomWrapRef.current;
+    const zi = zoomInnerRef.current;
+    if (!zw || !zi) return;
+    zw.style.setProperty("--lr", `${d}px`);
     zw.style.transform = place;
+
+    const br = bookRect();
+    if (!br) return;
+
+    const book = bookRef.current;
+    if (!book) return;
 
     const fit = lensFit(gx, gy, R, br, book.clientWidth, book.clientHeight, MAG);
 
@@ -493,14 +514,13 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     const v = view.current;
     const e = 0.14;
     let moved = false;
-    const pairs: [keyof typeof v, keyof typeof v][] = [["rx", "trx"], ["ry", "try_"], ["z", "tz"]];
-    for (const [k, t] of pairs) {
-      const d = (v[t] as number) - (v[k] as number);
+    for (const [k, t] of VIEW_PAIRS) {
+      const d = v[t] - v[k];
       if (Math.abs(d) > 0.0006) {
-        (v[k] as number) = (v[k] as number) + d * e;
+        v[k] = v[k] + d * e;
         moved = true;
       } else {
-        (v[k] as number) = v[t] as number;
+        v[k] = v[t];
       }
     }
     if (moved) applyView();
@@ -572,7 +592,6 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       shoveLoupe(dir);
       const to = dir === "next" ? nextIndex(from, M) : prevIndex(from, M);
       turnT.current = t || 0;
-      stripRefs.current = [];
       const nt = { dir, from, to };
       turnRef.current = nt;
       setTurn(nt);
@@ -674,8 +693,18 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       v.tz = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
       viewActive.current = true;
       kick();
-      setZoomRead(`${Math.round(v.tz * 100)}%`);
-      setZoomed({ out: v.tz <= ZOOM_MIN + 0.001, in: v.tz >= ZOOM_MAX - 0.001 });
+      const pct = `${Math.round(v.tz * 100)}%`;
+      if (pct !== zoomReadRef.current) {
+        zoomReadRef.current = pct;
+        setZoomRead(pct);
+      }
+      const out = v.tz <= ZOOM_MIN + 0.001;
+      const inn = v.tz >= ZOOM_MAX - 0.001;
+      if (out !== zoomedRef.current.out || inn !== zoomedRef.current.in) {
+        const nz = { out, in: inn };
+        zoomedRef.current = nz;
+        setZoomed(nz);
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -686,7 +715,15 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       if (drag.current || loupeGrab.current) return;
       const book = bookRef.current;
       if (!book) return;
-      const r = book.getBoundingClientRect();
+      const now = performance.now();
+      const cached = tiltRectRef.current;
+      let r: DOMRect;
+      if (cached && now - cached.at < 16) {
+        r = cached.r;
+      } else {
+        r = book.getBoundingClientRect();
+        tiltRectRef.current = { r, at: now };
+      }
       if (!r.width) return;
       const nx = Math.max(-1, Math.min(1, (cx - (r.left + r.width / 2)) / (r.width * 0.62)));
       const ny = Math.max(-1, Math.min(1, (cy - (r.top + r.height / 2)) / (r.height * 0.9)));
@@ -703,6 +740,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   }
 
   function riffleStep() {
+    if (!aliveRef.current) return;
     const s = riffle.current[riffleAt.current];
     if (!s) {
       endIntro();
@@ -712,7 +750,9 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
     startTurn("next", 0);
     // wait a frame so CurlLeaf mounts before tweening
     requestAnimationFrame(() => {
+      if (!aliveRef.current) return;
       tweenTo(1, s.dur, () => {
+        if (!aliveRef.current) return;
         const t = turnRef.current;
         if (!t) return;
         setIdx(t.to);
@@ -723,7 +763,10 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
         forceZoomPaint((v) => v + 1);
         if (introOn.current && riffleAt.current < riffle.current.length) {
           // let React paint the settled spread, then continue
-          requestAnimationFrame(() => riffleStep());
+          requestAnimationFrame(() => {
+            if (!aliveRef.current) return;
+            riffleStep();
+          });
         } else {
           endIntro();
           forceZoomPaint((v) => v + 1);
@@ -761,11 +804,17 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
 
   // keep view readout in sync + report index
   useEffect(() => {
+    aliveRef.current = true;
     reduced.current =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches) {
+      setFinePointer(false);
+    }
     layout();
     applyView();
+    zoomReadRef.current = "100%";
+    zoomedRef.current = { out: false, in: false };
     setZoomRead("100%");
     setZoomed({ out: false, in: false });
     restLoupe();
@@ -782,8 +831,13 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       if (saved !== null) return;
       startIntro();
     }, 350);
+    const isCoarsePointer = () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
     const onResize = () => {
       layout();
+      if (!loupeOnRef.current || isCoarsePointer()) return;
       syncLoupe(true);
     };
     window.addEventListener("resize", onResize);
@@ -792,12 +846,22 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
        swap, or a layout shift above it. Screen-space glass desyncs silently in
        those cases, so watch the box itself. ResizeObserver catches size/zoom
        changes; the scroll listener catches position changes. */
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => syncLoupe(true)) : null;
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            if (!loupeOnRef.current || isCoarsePointer()) return;
+            syncLoupe(true);
+          })
+        : null;
     if (ro && bookRef.current) ro.observe(bookRef.current);
-    const onScroll = () => syncLoupe(false);
+    const onScroll = () => {
+      if (!loupeOnRef.current || isCoarsePointer()) return;
+      syncLoupe(false);
+    };
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
 
     return () => {
+      aliveRef.current = false;
       window.removeEventListener("resize", onResize);
       window.removeEventListener("scroll", onScroll, { capture: true });
       ro?.disconnect();
@@ -910,7 +974,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
   const zoomPlate = turn ? plates[turnT.current >= 0.5 ? turn.to : turn.from] ?? plates[turn.to] : plates[idx];
 
   return (
-    <div ref={wrapRef} className={`grid w-full justify-items-center gap-5 ${introClass}`}>
+    <div className={`grid w-full justify-items-center gap-5 ${introClass}`}>
       <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
         <filter id="sb-mblur-1">
           <feGaussianBlur stdDeviation="5 0" />
@@ -921,7 +985,6 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       </svg>
 
       <div
-        ref={stageRef}
         className="relative flex w-full items-center justify-center [touch-action:pan-y]"
         onPointerDown={onStageDown}
         onPointerMove={onStageMove}
@@ -976,13 +1039,15 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
           </div>
 
           {/* magnified copy lives OUTSIDE the tilt so leaning never drags the glass */}
-          <div ref={zoomWrapRef} className="zoomwrap" aria-hidden="true">
-            <div ref={zoomInnerRef} className="zoominner">
-              <div className="h-full w-full">
-                <Spread plate={zoomPlate} folio={folioOf(turn ? turn.to : idx)} />
+          {loupeOn && finePointer && (
+            <div ref={zoomWrapRef} className="zoomwrap" aria-hidden="true" inert>
+              <div ref={zoomInnerRef} className="zoominner">
+                <div className="h-full w-full">
+                  <Spread plate={zoomPlate} folio={folioOf(turn ? turn.to : idx)} />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div ref={loupeRef} className="loupe" id="loupe">
             <span
@@ -1051,7 +1116,7 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
             <path d="M12.8 12.8 17.4 17.4M6.2 8.6h4.8" />
           </svg>
         </button>
-        <span className="min-w-10 text-center text-[11px] tracking-[0.1em] text-[rgba(43,39,33,0.36)] tabular-nums">{zoomRead}</span>
+        <span aria-live="polite" className="min-w-10 text-center text-[11px] tracking-[0.1em] text-[rgba(43,39,33,0.36)] tabular-nums">{zoomRead}</span>
         <button
           className="inline-flex h-7 w-7 items-center justify-center rounded-full border-0 bg-transparent text-[rgba(43,39,33,0.58)] transition-colors hover:bg-[rgba(255,252,244,0.9)] hover:text-[#2b2721] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="zoom in"
@@ -1086,26 +1151,25 @@ export function Sketchbook({ plates, landing = 0, onSpreadChange }: Props) {
       </p>
 
       {/* expose imperative jump for the index list */}
-      <JumpBridge goTo={goTo} current={cur} plateTitle={curPlate.title} />
+      <JumpBridge goTo={goTo} current={cur} plateTitle={curPlate.title} total={M} />
     </div>
   );
 }
 
 /** Hidden bridge so index buttons can request jumps via DOM event (works across server/client). */
-export const jumpBus: { go?: (i: number) => void } = {};
-function JumpBridge({ goTo, current, plateTitle }: { goTo: (i: number) => void; current: number; plateTitle: string }) {
+function JumpBridge({ goTo, current, plateTitle, total }: { goTo: (i: number) => void; current: number; plateTitle: string; total: number }) {
   useEffect(() => {
-    jumpBus.go = goTo;
     const onGoto = (e: Event) => {
       const i = (e as CustomEvent<number>).detail;
-      if (typeof i === "number") goTo(i);
+      if (!Number.isInteger(i)) return;
+      if (i < 0 || i >= total) return;
+      goTo(i);
     };
     window.addEventListener("sketchbook:goto", onGoto);
     return () => {
-      jumpBus.go = undefined;
       window.removeEventListener("sketchbook:goto", onGoto);
     };
-  }, [goTo]);
+  }, [goTo, total]);
   useEffect(() => {
     document.querySelectorAll(".plate").forEach((b, i) => b.setAttribute("aria-current", i === current ? "true" : "false"));
   }, [current, plateTitle]);

@@ -12,11 +12,18 @@
  *
  * Run: npm run check:assets
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = process.cwd();
 const SCANNED = ["content/plates.ts", "app/page.tsx", "app/layout.tsx"];
+try {
+  for (const f of readdirSync(join(root, "components"))) {
+    if (f.endsWith(".tsx")) SCANNED.push(`components/${f}`);
+  }
+} catch {
+  // components/ unreadable — fall back to the base list
+}
 
 /** Strip block comments and whole-line // comments, but never touch URLs inside strings. */
 function stripComments(src) {

@@ -28,6 +28,8 @@ function PlateMedia({ plate }: { plate: Plate }) {
               src={im.src}
               alt={im.alt ?? im.caption ?? plate.title}
               draggable={false}
+              decoding="async"
+              {...(i === 0 ? {} : { loading: "lazy" as const })}
               className={`w-full ${i === 0 ? "rotate-[-1.5deg]" : "rotate-[1.2deg]"} ${FRAME}`}
               style={{
                 background: "#fbf8f0",
@@ -52,6 +54,7 @@ function PlateMedia({ plate }: { plate: Plate }) {
           src={plate.image}
           alt={plate.imageAlt ?? plate.imageCaption ?? plate.title}
           draggable={false}
+          decoding="async"
           className={`aspect-[4/5] w-[62%] rotate-[-1.5deg] ${FRAME}`}
           style={{ background: "#fbf8f0" }}
         />
@@ -112,23 +115,57 @@ function PlateMetrics({ plate }: { plate: Plate }) {
  * mirrors (turn halves, loupe copy) are neutralised by the `.plate-link` rule
  * in globals.css.
  */
+const PLATE_LINK_CLASS =
+  "plate-link pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 transition-colors hover:decoration-[#2b2721]";
+
+function SafeLink({
+  href,
+  children,
+  className = PLATE_LINK_CLASS,
+  style,
+  me = false,
+}: {
+  href: string;
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  me?: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel={me ? "me noopener noreferrer" : "noopener noreferrer"}
+      onPointerDown={(e) => e.stopPropagation()}
+      className={className}
+      style={style}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** Prepend https:// only when no scheme is present (e.g. bare "github.com/…"). */
+function normalizeOutbound(raw: string): string {
+  const v = raw.trim();
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) return v;
+  return `https://${v}`;
+}
+
+/** Only these schemes may render as links in body copy; all else is plain text. */
+function isSafeBodyHref(href: string): boolean {
+  return /^(https?:|mailto:)/i.test(href.trim());
+}
+
 function PlateLinks({ plate }: { plate: Plate }) {
   const links = [...(plate.link ? [plate.link] : []), ...(plate.links ?? [])];
   if (!links.length) return null;
   return (
     <p className="relative z-[61] mt-[0.8em] mb-0 flex flex-wrap gap-x-[6%] gap-y-[0.4em] text-[clamp(7px,1.1vw,10.5px)] tracking-[0.18em] uppercase">
       {links.map((l) => (
-        <a
-          key={`${l.label}-${l.href}`}
-          href={l.href}
-          target="_blank"
-          rel="me noopener"
-          onPointerDown={(e) => e.stopPropagation()}
-          className="plate-link pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-4 transition-colors hover:decoration-[#2b2721]"
-          style={{ color: plate.accent }}
-        >
+        <SafeLink key={`${l.label}-${l.href}`} href={l.href} me style={{ color: plate.accent }}>
           {l.label}
-        </a>
+        </SafeLink>
       ))}
     </p>
   );
@@ -143,18 +180,26 @@ function renderBody(text: string): React.ReactNode[] {
   let k = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(
-      <a
-        key={k++}
-        href={m[2]}
-        target="_blank"
-        rel="me noopener"
-        onPointerDown={(e) => e.stopPropagation()}
-        className="pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-2 transition-colors hover:decoration-[#2b2721]"
-      >
-        {m[1]}
-      </a>
-    );
+    const label = m[1];
+    const href = m[2];
+    if (!isSafeBodyHref(href)) {
+      if (process.env.NODE_ENV !== "production") {
+        // Authoring signal: the plate copy asked for a link we refuse to render.
+        console.warn(`[Spread] dropped unsafe body link: [${label}](${href})`);
+      }
+      parts.push(label);
+    } else {
+      parts.push(
+        <SafeLink
+          key={k++}
+          href={href}
+          me
+          className="pointer-events-auto underline decoration-[rgba(43,39,33,0.28)] underline-offset-2 transition-colors hover:decoration-[#2b2721]"
+        >
+          {label}
+        </SafeLink>
+      );
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
@@ -230,27 +275,21 @@ export function Spread({ plate, folio }: { plate: Plate; folio: string }) {
         </p>
         {plate.repo && (
           <p className="relative z-[61] mt-[2%] text-[11px] tracking-[0.18em] text-[rgba(43,39,33,0.5)] uppercase">
-            <a
-              href={`https://${plate.repo}`}
-              target="_blank"
-              rel="noopener"
-              onPointerDown={(e) => e.stopPropagation()}
+            <SafeLink
+              href={normalizeOutbound(plate.repo)}
               className="pointer-events-auto hover:underline"
             >
               {plate.repo}
-            </a>
+            </SafeLink>
             {plate.live && (
               <>
                 {" · "}
-                <a
-                  href={`https://${plate.live}`}
-                  target="_blank"
-                  rel="noopener"
-                  onPointerDown={(e) => e.stopPropagation()}
+                <SafeLink
+                  href={normalizeOutbound(plate.live)}
                   className="pointer-events-auto hover:underline"
                 >
                   Live ↗
-                </a>
+                </SafeLink>
               </>
             )}
           </p>

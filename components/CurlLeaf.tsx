@@ -1,6 +1,6 @@
 "use client";
 
-import type { MutableRefObject } from "react";
+import type { RefObject } from "react";
 import { N_STRIPS, SPAN, type TurnDir } from "@/lib/book-physics";
 import type { Plate } from "@/content/plates";
 
@@ -10,7 +10,24 @@ interface Props {
   to: Plate;
   folioFrom: string;
   folioTo: string;
-  stripRefs: MutableRefObject<(HTMLDivElement | null)[]>;
+  stripRefs: RefObject<(HTMLDivElement | null)[]>;
+}
+
+function LeafFolio({ folio, depth }: { folio: string; depth: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute inset-0 flex items-center justify-center font-serif italic"
+      style={{
+        fontFamily: "var(--font-display), Georgia, serif",
+        color: "rgba(43,39,33,0.28)",
+        fontSize: "clamp(10px, 2vw, 20px)",
+        opacity: depth > N_STRIPS - 5 ? 1 : 0,
+      }}
+    >
+      {folio}
+    </span>
+  );
 }
 
 /**
@@ -61,34 +78,12 @@ function StripNode({
       className={`strip${isEdge ? " edge" : ""}`}
     >
       <div className="face front" style={{ background: paperWash(from.accent) }}>
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center font-serif italic"
-          style={{
-            fontFamily: "var(--font-display), Georgia, serif",
-            color: "rgba(43,39,33,0.28)",
-            fontSize: "clamp(10px, 2vw, 20px)",
-            opacity: depth > N_STRIPS - 5 ? 1 : 0,
-          }}
-        >
-          {folioFrom}
-        </span>
+        <LeafFolio folio={folioFrom} depth={depth} />
         <div className="sh" />
         <div className="gl" />
       </div>
       <div className="face back" style={{ background: paperWash(to.accent) }}>
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center font-serif italic"
-          style={{
-            fontFamily: "var(--font-display), Georgia, serif",
-            color: "rgba(43,39,33,0.28)",
-            fontSize: "clamp(10px, 2vw, 20px)",
-            opacity: depth > N_STRIPS - 5 ? 1 : 0,
-          }}
-        >
-          {folioTo}
-        </span>
+        <LeafFolio folio={folioTo} depth={depth} />
         <div className="sh" />
         <div className="gl" />
       </div>

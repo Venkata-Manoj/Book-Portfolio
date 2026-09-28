@@ -1,8 +1,7 @@
-"use client";
-
-import { PLATES } from "@/content/plates";
+import { LANDING_INDEX, PLATES } from "@/content/plates";
 import { Sketchbook } from "@/components/Sketchbook";
 import { ContactForm } from "@/components/ContactForm";
+import { PlateIndex } from "@/components/PlateIndex";
 import { Botany, Rule, SectionLabel, TopBar } from "@/components/SiteChrome";
 
 export default function Page() {
@@ -17,7 +16,7 @@ export default function Page() {
             AI / ML Undergraduate · GenAI & LLM Builder · India
           </p>
           <div className="relative z-[2] grid w-full justify-items-center">
-            <Sketchbook plates={PLATES} landing={0} />
+            <Sketchbook plates={PLATES} landing={LANDING_INDEX} />
           </div>
           <a
             href="#about"
@@ -29,7 +28,6 @@ export default function Page() {
               <polyline points="3,11 22,19 41,11" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </a>
-          <style>{`@keyframes cue-breathe{0%,100%{opacity:.15}50%{opacity:.7}}`}</style>
         </section>
 
         <Rule />
@@ -65,29 +63,7 @@ export default function Page() {
 
         <section id="plates" className="mx-auto max-w-[1080px] scroll-mt-28 px-[clamp(20px,5vw,48px)]">
           <SectionLabel>Plates — tap to open</SectionLabel>
-          <ol className="m-0 list-none border-t border-[rgba(43,39,33,0.14)] p-0">
-            {PLATES.map((p, i) => (
-              <li key={p.title}>
-                <button
-                  className="plate grid w-full cursor-pointer grid-cols-[3.4em_minmax(0,1fr)_auto] items-baseline gap-[18px] border-0 border-b border-[rgba(43,39,33,0.14)] bg-transparent px-1 py-[15px] text-left text-inherit transition-all hover:bg-[rgba(255,252,244,0.5)] hover:pl-3 aria-[current=true]:bg-[rgba(255,252,244,0.5)] aria-[current=true]:pl-3"
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent("sketchbook:goto", { detail: i }));
-                    document.getElementById("sketchbook")?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  }}
-                >
-                  <span className="text-[12px] tracking-[0.06em] text-[rgba(43,39,33,0.36)]">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="text-[clamp(19px,2.1vw,26px)]" style={{ fontFamily: "var(--font-display), Georgia, serif" }}>
-                    {p.title}
-                  </span>
-                  <span className="text-right text-[12.5px] tracking-[0.08em] text-[rgba(43,39,33,0.36)] uppercase">
-                    {p.place}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
+          <PlateIndex plates={PLATES} />
         </section>
 
         <Rule short />

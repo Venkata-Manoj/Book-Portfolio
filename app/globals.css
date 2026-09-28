@@ -286,6 +286,10 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 .sb-zone:active { cursor: grabbing; }
+.sb-zone:focus-visible {
+  outline: 3px solid #2b2721;
+  outline-offset: 2px;
+}
 .sb-prev { left: 0; width: 50%; }
 .sb-next { right: 0; width: 50%; }
 
@@ -333,4 +337,14 @@ body {
    copy are aria-hidden mirrors, so their link copies must never be clickable. */
 [aria-hidden="true"] .plate-link {
   pointer-events: none;
+}
+
+@keyframes cue-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
